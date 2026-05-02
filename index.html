@@ -343,6 +343,10 @@
   };
   let selectedChar = localStorage.getItem('nekoRunChar') || 'sabatora';
 
+  // ---- 仮想解像度（描画は固定 → CSSでフィット） ----
+  const VW = 480;
+  const VH = 800;
+
   // ---- ステージ設定 ----
   const STAGES = {
     morning: {
@@ -387,10 +391,6 @@
   };
   let selectedStage = localStorage.getItem('nekoRunStage') || 'night';
   if (!STAGES[selectedStage]) selectedStage = 'night';
-
-  // ---- 仮想解像度（描画は固定 → CSSでフィット） ----
-  const VW = 480;
-  const VH = 800;
   canvas.width = VW;
   canvas.height = VH;
 
