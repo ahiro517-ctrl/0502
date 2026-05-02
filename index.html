@@ -88,6 +88,62 @@
   }
   #overlay button:active { transform: scale(0.96); }
   .small { font-size: clamp(12px, 3vw, 14px); opacity: 0.7; margin-top: 16px; }
+  #charSelect {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .char-btn {
+    background: rgba(255,255,255,0.08) !important;
+    border: 2px solid rgba(255,255,255,0.2) !important;
+    border-radius: 18px !important;
+    padding: 12px 14px !important;
+    font: inherit !important;
+    color: #fff !important;
+    cursor: pointer;
+    box-shadow: none !important;
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-width: 130px;
+    transition: all 0.15s ease;
+  }
+  .char-btn.selected {
+    border-color: #ffb84d !important;
+    background: rgba(255,184,77,0.18) !important;
+    box-shadow: 0 0 24px rgba(255,184,77,0.35) !important;
+  }
+  .char-btn canvas {
+    width: 80px;
+    height: 80px;
+    background: rgba(0,0,0,0.25);
+    border-radius: 12px;
+    box-shadow: none;
+  }
+  .char-name {
+    font-weight: 700;
+    font-size: clamp(14px, 3.6vw, 16px);
+  }
+  .char-desc {
+    font-size: clamp(11px, 2.8vw, 13px);
+    opacity: 0.75;
+  }
+  #fishCount {
+    font-size: 18px;
+  }
+  #fishCount .icon {
+    display: inline-block;
+    width: 16px;
+    height: 10px;
+    background: #6cc4e6;
+    border-radius: 50% 30% 30% 50% / 50% 60% 40% 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    position: relative;
+  }
 </style>
 </head>
 <body>
@@ -95,11 +151,24 @@
   <canvas id="game"></canvas>
   <div id="hud">
     <div id="score">0 m</div>
+    <div id="fishCount"><span class="icon"></span><span id="fishNum">0</span></div>
     <div id="best">BEST 0 m</div>
   </div>
   <div id="overlay">
     <h1>ねこラン</h1>
-    <p>画面をタップでジャンプ<br>長押しで大ジャンプ<br>障害物をよけて走り抜けろ！</p>
+    <p id="overlayMsg">キャラを選んでスタート</p>
+    <div id="charSelect">
+      <button class="char-btn" data-char="black">
+        <canvas class="char-preview" data-preview="black" width="80" height="80"></canvas>
+        <div class="char-name">クロ</div>
+        <div class="char-desc">大きな黒長毛</div>
+      </button>
+      <button class="char-btn" data-char="sabatora">
+        <canvas class="char-preview" data-preview="sabatora" width="80" height="80"></canvas>
+        <div class="char-name">サバ</div>
+        <div class="char-desc">小さなサバトラ</div>
+      </button>
+    </div>
     <button id="startBtn">スタート</button>
     <div class="small">タップして開始</div>
   </div>
@@ -110,9 +179,42 @@
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
   const overlay = document.getElementById('overlay');
+  const overlayMsg = document.getElementById('overlayMsg');
   const startBtn = document.getElementById('startBtn');
   const scoreEl = document.getElementById('score');
   const bestEl = document.getElementById('best');
+  const fishNumEl = document.getElementById('fishNum');
+
+  // ---- キャラクター設定 ----
+  const CHARACTERS = {
+    black: {
+      name: '黒長毛',
+      w: 50, h: 64,
+      body: '#1c1c26',
+      shade: '#2c2c3a',
+      belly: '#3a3a48',
+      stripe: '#0a0a14',
+      pawPad: '#5a3848',
+      eye: '#ffd84d',
+      pupil: '#1a1a0a',
+      noseColor: '#4a2a3a',
+      fluffy: true
+    },
+    sabatora: {
+      name: 'サバトラ',
+      w: 34, h: 48,
+      body: '#a0a8b2',
+      shade: '#7a8290',
+      belly: '#e8ecf0',
+      stripe: '#3a4452',
+      pawPad: '#ffb8c8',
+      eye: '#3a8a4a',
+      pupil: '#1a1a2e',
+      noseColor: '#ff7a8a',
+      fluffy: false
+    }
+  };
+  let selectedChar = localStorage.getItem('nekoRunChar') || 'sabatora';
 
   // ---- 仮想解像度（描画は固定 → CSSでフィット） ----
   const VW = 480;
@@ -141,9 +243,12 @@
 
   let state = 'menu'; // menu | playing | dead
   let speed, distance, frame, holdFrames, jumping, jumpHold;
-  let player, obstacles, coins, particles, clouds, mountains, ground;
+  let player, obstacles, fishes, particles, clouds, mountains, ground;
+  let fishRun = 0; // この走行で取った魚
   let bestDistance = +(localStorage.getItem('ninjaRunBest') || 0);
+  let fishTotal = +(localStorage.getItem('nekoRunFishTotal') || 0);
   bestEl.textContent = 'BEST ' + Math.floor(bestDistance) + ' m';
+  fishNumEl.textContent = fishTotal;
 
   function reset() {
     speed = BASE_SPEED;
@@ -152,18 +257,21 @@
     holdFrames = 0;
     jumping = false;
     jumpHold = false;
+    fishRun = 0;
+    const c = CHARACTERS[selectedChar];
     player = {
-      x: 90, y: GROUND_Y, w: 40, h: 56,
-      vy: 0, onGround: true, runFrame: 0
+      x: 90, y: GROUND_Y, w: c.w, h: c.h,
+      vy: 0, onGround: true, runFrame: 0,
+      char: selectedChar
     };
     obstacles = [];
-    coins = [];
+    fishes = [];
     particles = [];
     clouds = makeClouds();
     mountains = makeMountains();
     ground = [];
     spawnObstacleTimer = 90;
-    spawnCoinTimer = 60;
+    spawnFishTimer = 60;
   }
 
   function makeClouds() {
@@ -182,7 +290,7 @@
   }
 
   let spawnObstacleTimer = 90;
-  let spawnCoinTimer = 60;
+  let spawnFishTimer = 60;
 
   function spawnObstacle() {
     const type = Math.random();
@@ -199,12 +307,13 @@
       obstacles.push({ x: VW + 70, y: GROUND_Y - 24, w: 30, h: 28, kind: 'rock' });
     }
   }
-  function spawnCoin() {
+  function spawnFish() {
     const high = Math.random() < 0.5;
-    const yBase = high ? GROUND_Y - 130 : GROUND_Y - 60;
+    // 高いほうはジャンプで取る、低いほうは走りながら取れる位置に
+    const yBase = high ? GROUND_Y - 140 : GROUND_Y - 28;
     const count = 3 + Math.floor(Math.random() * 3);
     for (let i = 0; i < count; i++) {
-      coins.push({ x: VW + 20 + i * 30, y: yBase, r: 10, taken: false, t: 0 });
+      fishes.push({ x: VW + 20 + i * 36, y: yBase, taken: false, t: Math.random() * Math.PI * 2 });
     }
   }
 
@@ -260,6 +369,56 @@
     startGame();
   });
 
+  // キャラ選択
+  const charButtons = document.querySelectorAll('.char-btn');
+  function setSelectedChar(name) {
+    selectedChar = name;
+    localStorage.setItem('nekoRunChar', name);
+    charButtons.forEach(b => {
+      b.classList.toggle('selected', b.dataset.char === name);
+    });
+  }
+  charButtons.forEach(b => {
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setSelectedChar(b.dataset.char);
+    });
+  });
+  setSelectedChar(selectedChar);
+
+  // キャラプレビュー描画
+  function renderCharPreviews() {
+    document.querySelectorAll('.char-preview').forEach(cv => {
+      const pctx = cv.getContext('2d');
+      const name = cv.dataset.preview;
+      const cfg = CHARACTERS[name];
+      pctx.clearRect(0, 0, cv.width, cv.height);
+      // プレビュー用の固定地面位置 (尻尾分を考慮して右寄せ)
+      const px = (cv.width - cfg.w) / 2 + 8;
+      const py = cv.height - 10;
+      // 影
+      pctx.fillStyle = 'rgba(0,0,0,0.25)';
+      pctx.beginPath();
+      pctx.ellipse(cv.width/2, py + 3, cfg.w * 0.55, 4, 0, 0, Math.PI*2);
+      pctx.fill();
+      // 走るフレームでアニメさせる
+      const fr = Math.floor((Date.now() / 120) % 4);
+      drawCatPreview(pctx, px, py, cfg.w, cfg.h, fr, true, cfg, Date.now() / 50);
+    });
+  }
+  // プレビュー専用 (GROUND_Yに依存しない drawCat 軽量版)
+  function drawCatPreview(ctx, x, y, w, h, fr, onGround, cfg, frameN) {
+    const baseW = 40, baseH = 56;
+    const sx = w / baseW, sy = h / baseH;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(sx, sy);
+    // 影なしで本体だけ描く: drawCatBody を共有したいので簡易にキャラ形状を再描画
+    // → ctx は別 canvas なので、グローバル ctx と混同しないよう関数を独立に
+    drawCatBody(ctx, baseW, baseH, fr, onGround, cfg, frameN);
+    ctx.restore();
+  }
+
   function startGame() {
     reset();
     state = 'playing';
@@ -274,8 +433,9 @@
     }
     bestEl.textContent = 'BEST ' + Math.floor(bestDistance) + ' m';
     overlay.querySelector('h1').textContent = 'ゲームオーバー';
-    overlay.querySelector('p').innerHTML =
-      `スコア <b>${Math.floor(distance)} m</b><br>ベスト <b>${Math.floor(bestDistance)} m</b>`;
+    overlayMsg.innerHTML =
+      `スコア <b>${Math.floor(distance)} m</b> ・ ベスト <b>${Math.floor(bestDistance)} m</b><br>` +
+      `この走行で <b>${fishRun}</b> 匹 / 累計 <b>${fishTotal}</b> 匹`;
     startBtn.textContent = 'もう一度';
     overlay.classList.remove('hidden');
   }
@@ -336,30 +496,35 @@
     for (const o of obstacles) o.x -= speed;
     obstacles = obstacles.filter(o => o.x + o.w > -10);
 
-    // コイン
-    spawnCoinTimer--;
-    if (spawnCoinTimer <= 0) {
-      spawnCoin();
-      spawnCoinTimer = 90 + Math.floor(Math.random() * 80);
+    // 魚
+    spawnFishTimer--;
+    if (spawnFishTimer <= 0) {
+      spawnFish();
+      spawnFishTimer = 90 + Math.floor(Math.random() * 80);
     }
-    for (const c of coins) {
-      c.x -= speed;
-      c.t += 0.2;
+    for (const f of fishes) {
+      f.x -= speed;
+      f.t += 0.2;
     }
-    coins = coins.filter(c => c.x > -20 && !c.taken);
+    fishes = fishes.filter(f => f.x > -30 && !f.taken);
 
-    // コイン取得
-    for (const c of coins) {
-      const dx = (player.x + player.w/2) - c.x;
-      const dy = (player.y - player.h/2) - c.y;
-      if (dx*dx + dy*dy < (c.r + 22) * (c.r + 22)) {
-        c.taken = true;
-        distance += 5; // ボーナス
+    // 魚取得
+    for (const f of fishes) {
+      const dx = (player.x + player.w/2) - f.x;
+      const dy = (player.y - player.h/2) - f.y;
+      const grabR = Math.max(player.w, player.h) * 0.55;
+      if (dx*dx + dy*dy < grabR * grabR) {
+        f.taken = true;
+        fishRun++;
+        fishTotal++;
+        localStorage.setItem('nekoRunFishTotal', fishTotal);
+        fishNumEl.textContent = fishTotal;
+        distance += 5;
         for (let i = 0; i < 10; i++) {
           particles.push({
-            x: c.x, y: c.y,
+            x: f.x, y: f.y,
             vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4,
-            life: 22, color: '#ffd84d'
+            life: 22, color: '#6cc4e6'
           });
         }
       }
@@ -476,197 +641,229 @@
   }
 
   function drawPlayer() {
-    const x = player.x;
-    const y = player.y;
-    const w = player.w;
-    const h = player.h;
-    const fr = Math.floor(player.runFrame);
-    const onGround = player.onGround;
+    drawCat(ctx, player.x, player.y, player.w, player.h,
+      Math.floor(player.runFrame), player.onGround, CHARACTERS[player.char], frame, true);
+  }
 
+  // 共通の猫描画 (プレビューでも使う)
+  function drawCat(ctx, x, y, w, h, fr, onGround, cfg, frameN, drawShadow) {
     // 影
-    if (onGround) {
+    if (onGround && drawShadow) {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath();
-      ctx.ellipse(x + w/2, GROUND_Y + 4, 22, 5, 0, 0, Math.PI*2);
+      ctx.ellipse(x + w/2, GROUND_Y + 4, w * 0.55, 5, 0, 0, Math.PI*2);
       ctx.fill();
     }
 
-    // 体（猫）
+    const baseW = 40, baseH = 56;
+    const sx = w / baseW, sy = h / baseH;
     ctx.save();
     ctx.translate(x, y);
+    ctx.scale(sx, sy);
+    drawCatBody(ctx, baseW, baseH, fr, onGround, cfg, frameN);
+    ctx.restore();
+  }
+
+  function drawCatBody(ctx, baseW, baseH, fr, onGround, cfg, frameN) {
+    const H = baseH;
 
     // 尻尾 (背後でゆらゆら)
-    const tailWave = Math.sin(frame * 0.25) * 6;
-    ctx.strokeStyle = '#e89846';
-    ctx.lineWidth = 7;
+    const tailWave = Math.sin(frameN * 0.25) * 6;
+    ctx.strokeStyle = cfg.body;
+    ctx.lineWidth = cfg.fluffy ? 10 : 7;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(2, -h + 32);
-    ctx.quadraticCurveTo(-12, -h + 22 + tailWave, -14, -h + 4 + tailWave);
+    ctx.moveTo(2, -H + 32);
+    ctx.quadraticCurveTo(-12, -H + 22 + tailWave, -14, -H + 4 + tailWave);
     ctx.stroke();
-    ctx.strokeStyle = '#c47830';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(-7, -h + 14 + tailWave * 0.7);
-    ctx.lineTo(-11, -h + 13 + tailWave * 0.7);
-    ctx.moveTo(-9, -h + 22 + tailWave * 0.5);
-    ctx.lineTo(-13, -h + 21 + tailWave * 0.5);
-    ctx.stroke();
+    if (cfg.fluffy) {
+      // 長毛のふさふさ
+      ctx.fillStyle = cfg.body;
+      ctx.beginPath();
+      ctx.arc(-14, -H + 4 + tailWave, 7, 0, Math.PI*2);
+      ctx.arc(-10, -H + 14 + tailWave * 0.7, 5, 0, Math.PI*2);
+      ctx.fill();
+    }
 
-    // 足
-    ctx.fillStyle = '#e89846';
+    // 後足
+    ctx.fillStyle = cfg.body;
     if (onGround) {
       const legA = (fr === 0 || fr === 2) ? 0 : 6;
       const legB = (fr === 0 || fr === 2) ? 6 : 0;
       ctx.fillRect(8, -10, 9, 10 + legA);
       ctx.fillRect(23, -10, 9, 10 + legB);
-      // 肉球
-      ctx.fillStyle = '#ffb8c8';
+      ctx.fillStyle = cfg.pawPad;
       ctx.fillRect(9, -1 + legA, 7, 2);
       ctx.fillRect(24, -1 + legB, 7, 2);
     } else {
-      // ジャンプ中: 折りたたみ脚
       ctx.fillRect(6, -16, 9, 10);
       ctx.fillRect(25, -16, 9, 10);
-      ctx.fillStyle = '#ffb8c8';
+      ctx.fillStyle = cfg.pawPad;
       ctx.fillRect(7, -8, 7, 2);
       ctx.fillRect(26, -8, 7, 2);
     }
 
-    // 胴体 (オレンジ)
-    ctx.fillStyle = '#f0a85a';
+    // 胴体
+    ctx.fillStyle = cfg.body;
     ctx.beginPath();
-    ctx.ellipse(w/2, -h/2 + 8, w/2 - 4, h/2 - 8, 0, 0, Math.PI*2);
+    ctx.ellipse(baseW/2, -H/2 + 8, baseW/2 - 4, H/2 - 8, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // お腹 (白)
-    ctx.fillStyle = '#fff5e8';
+    if (cfg.fluffy) {
+      // ふわふわの毛束
+      ctx.fillStyle = cfg.shade;
+      ctx.beginPath();
+      ctx.arc(4, -H/2, 5, 0, Math.PI*2);
+      ctx.arc(baseW - 4, -H/2, 5, 0, Math.PI*2);
+      ctx.arc(8, -H + 24, 5, 0, Math.PI*2);
+      ctx.arc(baseW - 8, -H + 24, 5, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // お腹
+    ctx.fillStyle = cfg.belly;
     ctx.beginPath();
-    ctx.ellipse(w/2, -h/2 + 14, w/2 - 11, h/2 - 14, 0, 0, Math.PI*2);
+    ctx.ellipse(baseW/2, -H/2 + 14, baseW/2 - 11, H/2 - 14, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // 縞模様
-    ctx.fillStyle = '#c47830';
-    ctx.fillRect(7, -h + 26, 5, 3);
-    ctx.fillRect(7, -h + 34, 5, 3);
-    ctx.fillRect(w - 12, -h + 26, 5, 3);
-    ctx.fillRect(w - 12, -h + 34, 5, 3);
+    // 縞模様 (サバトラは多め、黒猫はうっすら)
+    ctx.fillStyle = cfg.stripe;
+    if (cfg.fluffy) {
+      ctx.globalAlpha = 0.5;
+    }
+    ctx.fillRect(7, -H + 26, 5, 3);
+    ctx.fillRect(7, -H + 34, 5, 3);
+    ctx.fillRect(baseW - 12, -H + 26, 5, 3);
+    ctx.fillRect(baseW - 12, -H + 34, 5, 3);
+    if (!cfg.fluffy) {
+      ctx.fillRect(7, -H + 30, 5, 2);
+      ctx.fillRect(baseW - 12, -H + 30, 5, 2);
+    }
+    ctx.globalAlpha = 1;
 
     // 前足
-    ctx.fillStyle = '#e89846';
+    ctx.fillStyle = cfg.body;
     if (onGround) {
       const armSwing = (fr === 0 || fr === 2) ? -2 : 3;
-      ctx.fillRect(2, -h + 28, 7, 14 + armSwing);
-      ctx.fillRect(w - 9, -h + 28, 7, 14 - armSwing);
-      ctx.fillStyle = '#ffb8c8';
-      ctx.fillRect(2, -h + 41 + armSwing, 7, 2);
-      ctx.fillRect(w - 9, -h + 41 - armSwing, 7, 2);
+      ctx.fillRect(2, -H + 28, 7, 14 + armSwing);
+      ctx.fillRect(baseW - 9, -H + 28, 7, 14 - armSwing);
+      ctx.fillStyle = cfg.pawPad;
+      ctx.fillRect(2, -H + 41 + armSwing, 7, 2);
+      ctx.fillRect(baseW - 9, -H + 41 - armSwing, 7, 2);
     } else {
-      ctx.fillRect(0, -h + 26, 7, 12);
-      ctx.fillRect(w - 7, -h + 26, 7, 12);
+      ctx.fillRect(0, -H + 26, 7, 12);
+      ctx.fillRect(baseW - 7, -H + 26, 7, 12);
     }
 
     // 頭
-    ctx.fillStyle = '#f0a85a';
+    ctx.fillStyle = cfg.body;
     ctx.beginPath();
-    ctx.ellipse(w/2, -h + 12, 16, 13, 0, 0, Math.PI*2);
+    ctx.ellipse(baseW/2, -H + 12, 16, 13, 0, 0, Math.PI*2);
     ctx.fill();
 
-    // 耳 (三角)
-    ctx.fillStyle = '#f0a85a';
+    if (cfg.fluffy) {
+      // 顔まわりの毛
+      ctx.fillStyle = cfg.shade;
+      ctx.beginPath();
+      ctx.arc(5, -H + 14, 4, 0, Math.PI*2);
+      ctx.arc(baseW - 5, -H + 14, 4, 0, Math.PI*2);
+      ctx.arc(10, -H + 22, 3, 0, Math.PI*2);
+      ctx.arc(baseW - 10, -H + 22, 3, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // 耳
+    ctx.fillStyle = cfg.body;
     ctx.beginPath();
-    ctx.moveTo(8, -h + 6);
-    ctx.lineTo(13, -h - 7);
-    ctx.lineTo(20, -h + 2);
+    ctx.moveTo(8, -H + 6);
+    ctx.lineTo(13, -H - 7);
+    ctx.lineTo(20, -H + 2);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(20, -h + 2);
-    ctx.lineTo(27, -h - 7);
-    ctx.lineTo(32, -h + 6);
+    ctx.moveTo(20, -H + 2);
+    ctx.lineTo(27, -H - 7);
+    ctx.lineTo(32, -H + 6);
     ctx.closePath();
     ctx.fill();
-
-    // 耳の中 (ピンク)
+    // 耳の中
     ctx.fillStyle = '#ffb8c8';
     ctx.beginPath();
-    ctx.moveTo(11, -h + 4);
-    ctx.lineTo(14, -h - 3);
-    ctx.lineTo(17, -h + 2);
+    ctx.moveTo(11, -H + 4);
+    ctx.lineTo(14, -H - 3);
+    ctx.lineTo(17, -H + 2);
     ctx.closePath();
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(23, -h + 2);
-    ctx.lineTo(26, -h - 3);
-    ctx.lineTo(29, -h + 4);
+    ctx.moveTo(23, -H + 2);
+    ctx.lineTo(26, -H - 3);
+    ctx.lineTo(29, -H + 4);
     ctx.closePath();
     ctx.fill();
 
-    // ほっぺ (薄ピンク)
-    ctx.fillStyle = 'rgba(255, 150, 170, 0.5)';
+    // ほっぺ
+    ctx.fillStyle = 'rgba(255, 150, 170, 0.4)';
     ctx.beginPath();
-    ctx.arc(8, -h + 16, 3, 0, Math.PI*2);
-    ctx.arc(32, -h + 16, 3, 0, Math.PI*2);
+    ctx.arc(8, -H + 16, 3, 0, Math.PI*2);
+    ctx.arc(32, -H + 16, 3, 0, Math.PI*2);
     ctx.fill();
 
     // 目 (白)
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(14, -h + 12, 3.5, 0, Math.PI*2);
-    ctx.arc(26, -h + 12, 3.5, 0, Math.PI*2);
+    ctx.arc(14, -H + 12, 3.5, 0, Math.PI*2);
+    ctx.arc(26, -H + 12, 3.5, 0, Math.PI*2);
     ctx.fill();
-    // 瞳 (緑)
-    ctx.fillStyle = '#3a8a4a';
+    // 虹彩
+    ctx.fillStyle = cfg.eye;
     ctx.beginPath();
-    ctx.arc(14, -h + 12, 2, 0, Math.PI*2);
-    ctx.arc(26, -h + 12, 2, 0, Math.PI*2);
+    ctx.arc(14, -H + 12, 2.4, 0, Math.PI*2);
+    ctx.arc(26, -H + 12, 2.4, 0, Math.PI*2);
     ctx.fill();
     // 瞳孔
-    ctx.fillStyle = '#1a1a2e';
-    ctx.fillRect(13.5, -h + 10, 1, 4);
-    ctx.fillRect(25.5, -h + 10, 1, 4);
+    ctx.fillStyle = cfg.pupil;
+    ctx.fillRect(13.5, -H + 10, 1, 4);
+    ctx.fillRect(25.5, -H + 10, 1, 4);
     // ハイライト
     ctx.fillStyle = '#fff';
-    ctx.fillRect(15, -h + 11, 1, 1);
-    ctx.fillRect(27, -h + 11, 1, 1);
+    ctx.fillRect(15, -H + 11, 1, 1);
+    ctx.fillRect(27, -H + 11, 1, 1);
 
     // 鼻
-    ctx.fillStyle = '#ff7a8a';
+    ctx.fillStyle = cfg.noseColor;
     ctx.beginPath();
-    ctx.moveTo(18, -h + 17);
-    ctx.lineTo(22, -h + 17);
-    ctx.lineTo(20, -h + 19);
+    ctx.moveTo(18, -H + 17);
+    ctx.lineTo(22, -H + 17);
+    ctx.lineTo(20, -H + 19);
     ctx.closePath();
     ctx.fill();
 
-    // 口 (にっこり)
-    ctx.strokeStyle = '#1a1a2e';
+    // 口
+    ctx.strokeStyle = cfg.fluffy ? '#000' : '#1a1a2e';
     ctx.lineWidth = 1.2;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(20, -h + 19);
-    ctx.lineTo(20, -h + 21);
-    ctx.moveTo(20, -h + 21);
-    ctx.quadraticCurveTo(17, -h + 23, 15, -h + 21);
-    ctx.moveTo(20, -h + 21);
-    ctx.quadraticCurveTo(23, -h + 23, 25, -h + 21);
+    ctx.moveTo(20, -H + 19);
+    ctx.lineTo(20, -H + 21);
+    ctx.moveTo(20, -H + 21);
+    ctx.quadraticCurveTo(17, -H + 23, 15, -H + 21);
+    ctx.moveTo(20, -H + 21);
+    ctx.quadraticCurveTo(23, -H + 23, 25, -H + 21);
     ctx.stroke();
 
     // ひげ
-    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.strokeStyle = cfg.fluffy ? 'rgba(255,255,255,0.7)' : 'rgba(60,60,80,0.85)';
     ctx.lineWidth = 0.8;
     ctx.beginPath();
-    ctx.moveTo(10, -h + 17);
-    ctx.lineTo(2, -h + 16);
-    ctx.moveTo(10, -h + 19);
-    ctx.lineTo(2, -h + 21);
-    ctx.moveTo(30, -h + 17);
-    ctx.lineTo(38, -h + 16);
-    ctx.moveTo(30, -h + 19);
-    ctx.lineTo(38, -h + 21);
+    ctx.moveTo(10, -H + 17);
+    ctx.lineTo(2, -H + 16);
+    ctx.moveTo(10, -H + 19);
+    ctx.lineTo(2, -H + 21);
+    ctx.moveTo(30, -H + 17);
+    ctx.lineTo(38, -H + 16);
+    ctx.moveTo(30, -H + 19);
+    ctx.lineTo(38, -H + 21);
     ctx.stroke();
-
-    ctx.restore();
   }
 
   function drawObstacles() {
@@ -699,20 +896,51 @@
     }
   }
 
-  function drawCoins() {
-    for (const c of coins) {
-      const flick = Math.abs(Math.sin(c.t));
-      const r = c.r * (0.6 + 0.4 * flick);
-      ctx.fillStyle = '#b87a00';
+  function drawFish() {
+    for (const f of fishes) {
+      const bob = Math.sin(f.t) * 2;
+      const cx = f.x, cy = f.y + bob;
+      // 体
+      ctx.fillStyle = '#6cc4e6';
       ctx.beginPath();
-      ctx.ellipse(c.x, c.y, r, c.r, 0, 0, Math.PI*2);
+      ctx.ellipse(cx, cy, 14, 8, 0, 0, Math.PI*2);
       ctx.fill();
-      ctx.fillStyle = '#ffd84d';
+      // お腹 (薄)
+      ctx.fillStyle = '#cfeaf3';
       ctx.beginPath();
-      ctx.ellipse(c.x, c.y, r * 0.7, c.r * 0.85, 0, 0, Math.PI*2);
+      ctx.ellipse(cx, cy + 2, 11, 5, 0, 0, Math.PI*2);
       ctx.fill();
-      ctx.fillStyle = '#fff5b8';
-      ctx.fillRect(c.x - r*0.3, c.y - c.r*0.5, r * 0.2, c.r * 0.5);
+      // 尾びれ (右側に流す = スクロール方向に合う)
+      ctx.fillStyle = '#4a9ec0';
+      ctx.beginPath();
+      ctx.moveTo(cx + 12, cy);
+      ctx.lineTo(cx + 22, cy - 6);
+      ctx.lineTo(cx + 19, cy);
+      ctx.lineTo(cx + 22, cy + 6);
+      ctx.closePath();
+      ctx.fill();
+      // 背びれ
+      ctx.beginPath();
+      ctx.moveTo(cx - 2, cy - 7);
+      ctx.lineTo(cx + 4, cy - 12);
+      ctx.lineTo(cx + 6, cy - 7);
+      ctx.closePath();
+      ctx.fill();
+      // エラ
+      ctx.strokeStyle = '#4a9ec0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx - 6, cy, 4, -Math.PI/2, Math.PI/2);
+      ctx.stroke();
+      // 目
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(cx - 8, cy - 1, 2.5, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath();
+      ctx.arc(cx - 8.5, cy - 1, 1.2, 0, Math.PI*2);
+      ctx.fill();
     }
   }
 
@@ -728,7 +956,7 @@
   function render() {
     drawBackground();
     drawGround();
-    drawCoins();
+    drawFish();
     drawObstacles();
     drawPlayer();
     drawParticles();
@@ -738,6 +966,7 @@
   function loop() {
     if (state === 'playing') update();
     render();
+    if (state !== 'playing') renderCharPreviews();
     requestAnimationFrame(loop);
   }
   reset();
