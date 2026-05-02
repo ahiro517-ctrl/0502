@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#1b1f3a" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
 <title>ねこラン</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -249,6 +252,29 @@
     -webkit-backdrop-filter: blur(2px);
   }
   #slowBar.hidden { opacity: 0; }
+  #buildTag {
+    position: absolute;
+    right: 6px; bottom: 6px;
+    font-size: 10px;
+    opacity: 0.5;
+    color: #fff;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #errorBox {
+    position: absolute;
+    left: 10px; right: 10px; top: 10px;
+    padding: 12px;
+    background: rgba(220, 50, 50, 0.92);
+    color: #fff;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.4;
+    z-index: 20;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  #errorBox.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -267,6 +293,8 @@
     <div class="badge-name"></div>
   </div>
   <div id="slowBar" class="hidden">SLOW</div>
+  <div id="buildTag">v8</div>
+  <div id="errorBox" class="hidden"></div>
   <div id="overlay">
     <h1>ねこラン</h1>
     <p id="overlayMsg">キャラを選んでスタート<br><span style="font-size:0.85em;opacity:0.8">タップでジャンプ・空中で再タップで二段ジャンプ<br>マタタビを取ると無敵に</span></p>
@@ -302,6 +330,14 @@
 </div>
 
 <script>
+window.addEventListener('error', (e) => {
+  const box = document.getElementById('errorBox');
+  if (box) {
+    box.textContent = 'エラー: ' + e.message + '\n@ ' + (e.filename || '') + ':' + (e.lineno || '');
+    box.classList.remove('hidden');
+  }
+});
+try {
 (() => {
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -2070,6 +2106,14 @@
     startGame();
   });
 })();
+} catch (err) {
+  const box = document.getElementById('errorBox');
+  if (box) {
+    box.textContent = 'エラー: ' + (err && err.message ? err.message : String(err)) +
+      '\n' + (err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n') : '');
+    box.classList.remove('hidden');
+  }
+}
 </script>
 </body>
 </html>
