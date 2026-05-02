@@ -156,7 +156,7 @@
   </div>
   <div id="overlay">
     <h1>ねこラン</h1>
-    <p id="overlayMsg">キャラを選んでスタート</p>
+    <p id="overlayMsg">キャラを選んでスタート<br><span style="font-size:0.85em;opacity:0.8">タップでジャンプ・空中で再タップで二段ジャンプ<br>マタタビを取ると無敵に</span></p>
     <div id="charSelect">
       <button class="char-btn" data-char="black">
         <canvas class="char-preview" data-preview="black" width="80" height="80"></canvas>
@@ -242,8 +242,9 @@
   const BASE_SPEED = 5.5;
 
   let state = 'menu'; // menu | playing | dead
-  let speed, distance, frame, holdFrames, jumping, jumpHold;
-  let player, obstacles, fishes, particles, clouds, mountains, ground;
+  let speed, distance, frame, holdFrames, jumping, jumpHold, jumpsLeft;
+  let player, obstacles, fishes, matatabis, particles, clouds, mountains, ground;
+  let invincibleFrames = 0;
   let fishRun = 0; // この走行で取った魚
   let bestDistance = +(localStorage.getItem('ninjaRunBest') || 0);
   let fishTotal = +(localStorage.getItem('nekoRunFishTotal') || 0);
@@ -257,6 +258,8 @@
     holdFrames = 0;
     jumping = false;
     jumpHold = false;
+    jumpsLeft = 2;
+    invincibleFrames = 0;
     fishRun = 0;
     const c = CHARACTERS[selectedChar];
     player = {
@@ -266,12 +269,14 @@
     };
     obstacles = [];
     fishes = [];
+    matatabis = [];
     particles = [];
     clouds = makeClouds();
     mountains = makeMountains();
     ground = [];
     spawnObstacleTimer = 90;
     spawnFishTimer = 60;
+    spawnMatatabiTimer = 600;
   }
 
   function makeClouds() {
@@ -291,20 +296,22 @@
 
   let spawnObstacleTimer = 90;
   let spawnFishTimer = 60;
+  let spawnMatatabiTimer = 600;
 
   function spawnObstacle() {
     const type = Math.random();
     if (type < 0.55) {
-      // 低い障害物 (岩)
-      const w = 28 + Math.random() * 18;
-      obstacles.push({ x: VW + 20, y: GROUND_Y - 28, w, h: 32, kind: 'rock' });
-    } else if (type < 0.8) {
-      // 高い障害物 (杭)
-      obstacles.push({ x: VW + 20, y: GROUND_Y - 56, w: 26, h: 60, kind: 'spike' });
+      // ヘビ (低い・地面)
+      const w = 56 + Math.random() * 24;
+      obstacles.push({ x: VW + 20, y: GROUND_Y, w, h: 18, kind: 'snake', t: Math.random() * Math.PI * 2 });
+    } else if (type < 0.82) {
+      // 鳥 (高い・空中)
+      const altitude = 36 + Math.random() * 24; // 36..60
+      obstacles.push({ x: VW + 20, y: GROUND_Y - altitude, w: 44, h: 36, kind: 'bird', t: 0 });
     } else {
-      // 連続岩
-      obstacles.push({ x: VW + 20, y: GROUND_Y - 24, w: 30, h: 28, kind: 'rock' });
-      obstacles.push({ x: VW + 70, y: GROUND_Y - 24, w: 30, h: 28, kind: 'rock' });
+      // ヘビ + 鳥 コンボ (二段ジャンプで抜ける用)
+      obstacles.push({ x: VW + 20, y: GROUND_Y, w: 60, h: 18, kind: 'snake', t: Math.random() * Math.PI * 2 });
+      obstacles.push({ x: VW + 130, y: GROUND_Y - 50, w: 44, h: 36, kind: 'bird', t: 0 });
     }
   }
   function spawnFish() {
@@ -316,6 +323,10 @@
       fishes.push({ x: VW + 20 + i * 36, y: yBase, taken: false, t: Math.random() * Math.PI * 2 });
     }
   }
+  function spawnMatatabi() {
+    const y = GROUND_Y - 60 - Math.random() * 50;
+    matatabis.push({ x: VW + 20, y, t: 0, taken: false });
+  }
 
   // ---- 入力 ----
   function pressStart(e) {
@@ -325,18 +336,24 @@
       return;
     }
     if (state === 'playing') {
-      if (player.onGround) {
-        player.vy = JUMP_V;
+      if (jumpsLeft > 0) {
+        const isDouble = !player.onGround;
+        player.vy = isDouble ? JUMP_V * 0.85 : JUMP_V;
         player.onGround = false;
         jumping = true;
         holdFrames = 0;
         jumpHold = true;
+        jumpsLeft--;
         // ジャンプ煙
-        for (let i = 0; i < 8; i++) {
+        const cnt = isDouble ? 14 : 8;
+        const color = isDouble ? '#ffe5a0' : '#ddd';
+        for (let i = 0; i < cnt; i++) {
           particles.push({
-            x: player.x + player.w/2, y: player.y,
-            vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 2,
-            life: 20, color: '#ddd'
+            x: player.x + player.w/2,
+            y: isDouble ? player.y - player.h/2 : player.y,
+            vx: (Math.random() - 0.5) * (isDouble ? 4 : 2),
+            vy: -Math.random() * (isDouble ? 3 : 2) + (isDouble ? 1 : 0),
+            life: isDouble ? 24 : 20, color
           });
         }
       }
@@ -474,7 +491,9 @@
       }
       player.onGround = true;
       jumping = false;
+      jumpsLeft = 2;
     }
+    if (invincibleFrames > 0) invincibleFrames--;
     player.runFrame = (player.runFrame + 0.3) % 4;
 
     // 走り煙
@@ -530,22 +549,56 @@
       }
     }
 
-    // 当たり判定
-    const pBox = { x: player.x + 6, y: player.y - 4, w: player.w - 12, h: player.h - 8 };
+    // 障害物アニメ
     for (const o of obstacles) {
-      if (aabb(pBox, o)) {
-        // 死亡パーティクル
+      if (o.kind === 'snake' || o.kind === 'bird') o.t += 0.2;
+    }
+
+    // マタタビ
+    spawnMatatabiTimer--;
+    if (spawnMatatabiTimer <= 0) {
+      spawnMatatabi();
+      spawnMatatabiTimer = 600 + Math.floor(Math.random() * 600); // 10〜20秒
+    }
+    for (const m of matatabis) {
+      m.x -= speed;
+      m.t += 0.15;
+    }
+    matatabis = matatabis.filter(m => m.x > -30 && !m.taken);
+    for (const m of matatabis) {
+      const dx = (player.x + player.w/2) - m.x;
+      const dy = (player.y - player.h/2) - m.y;
+      const grabR = Math.max(player.w, player.h) * 0.6;
+      if (dx*dx + dy*dy < grabR * grabR) {
+        m.taken = true;
+        invincibleFrames = 60 * 5; // 5秒
         for (let i = 0; i < 24; i++) {
           particles.push({
-            x: player.x + player.w/2,
-            y: player.y - player.h/2,
-            vx: (Math.random()-0.5)*6,
-            vy: (Math.random()-0.5)*6 - 2,
-            life: 30, color: '#ff5e87'
+            x: m.x, y: m.y,
+            vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5 - 1,
+            life: 30, color: '#a8e060'
           });
         }
-        gameOver();
-        return;
+      }
+    }
+
+    // 当たり判定 (無敵中はスキップ)
+    if (invincibleFrames <= 0) {
+      const pBox = { x: player.x + 6, y: player.y - 4, w: player.w - 12, h: player.h - 8 };
+      for (const o of obstacles) {
+        if (aabb(pBox, o)) {
+          for (let i = 0; i < 24; i++) {
+            particles.push({
+              x: player.x + player.w/2,
+              y: player.y - player.h/2,
+              vx: (Math.random()-0.5)*6,
+              vy: (Math.random()-0.5)*6 - 2,
+              life: 30, color: '#ff5e87'
+            });
+          }
+          gameOver();
+          return;
+        }
       }
     }
 
@@ -641,8 +694,29 @@
   }
 
   function drawPlayer() {
+    if (invincibleFrames > 0) {
+      // マタタビオーラ
+      const auraT = frame * 0.15;
+      const auraR = Math.max(player.w, player.h) * 0.7 + Math.sin(auraT) * 4;
+      const grad = ctx.createRadialGradient(
+        player.x + player.w/2, player.y - player.h/2, 4,
+        player.x + player.w/2, player.y - player.h/2, auraR
+      );
+      grad.addColorStop(0, 'rgba(220,255,160,0.55)');
+      grad.addColorStop(1, 'rgba(220,255,160,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(player.x + player.w/2, player.y - player.h/2, auraR, 0, Math.PI*2);
+      ctx.fill();
+
+      // 点滅: 残り少ないと早く点滅
+      const flashSpeed = invincibleFrames < 60 ? 3 : 5;
+      const phase = Math.floor(frame / flashSpeed) % 2;
+      ctx.globalAlpha = phase === 0 ? 1 : 0.35;
+    }
     drawCat(ctx, player.x, player.y, player.w, player.h,
       Math.floor(player.runFrame), player.onGround, CHARACTERS[player.char], frame, true);
+    ctx.globalAlpha = 1;
   }
 
   // 共通の猫描画 (プレビューでも使う)
@@ -868,30 +942,106 @@
 
   function drawObstacles() {
     for (const o of obstacles) {
-      if (o.kind === 'rock') {
-        ctx.fillStyle = '#5a4a6a';
+      if (o.kind === 'snake') {
+        // ヘビ: 蛇行する胴体 + 頭 (左向き)
+        const bodyY = o.y - o.h / 2;
+        const wave = o.t || 0;
+        const cw = o.w;
+        // 胴体 (上下にうねる帯)
+        ctx.fillStyle = '#4a8a3a';
         ctx.beginPath();
-        ctx.moveTo(o.x, o.y);
-        ctx.lineTo(o.x, o.y - o.h * 0.7);
-        ctx.lineTo(o.x + o.w * 0.4, o.y - o.h);
-        ctx.lineTo(o.x + o.w, o.y - o.h * 0.6);
-        ctx.lineTo(o.x + o.w, o.y);
+        const seg = 8;
+        const top = [];
+        const bot = [];
+        for (let i = 0; i <= cw; i += seg) {
+          const yy = bodyY + Math.sin(i * 0.18 + wave) * 4;
+          top.push([o.x + i, yy - o.h * 0.45]);
+          bot.push([o.x + i, yy + o.h * 0.45]);
+        }
+        ctx.moveTo(top[0][0], top[0][1]);
+        for (const p of top) ctx.lineTo(p[0], p[1]);
+        for (let i = bot.length - 1; i >= 0; i--) ctx.lineTo(bot[i][0], bot[i][1]);
         ctx.closePath();
         ctx.fill();
-        ctx.fillStyle = '#7a6a8a';
-        ctx.fillRect(o.x + 4, o.y - o.h * 0.7, 6, 4);
-      } else if (o.kind === 'spike') {
-        ctx.fillStyle = '#222';
-        ctx.fillRect(o.x + o.w/2 - 3, o.y - 10, 6, 10);
-        ctx.fillStyle = '#c0c0d0';
+        // 縞模様
+        ctx.fillStyle = '#2a6a1a';
+        for (let i = 4; i < cw - 6; i += 12) {
+          const yy = bodyY + Math.sin(i * 0.18 + wave) * 4;
+          ctx.fillRect(o.x + i, yy - o.h * 0.3, 3, o.h * 0.6);
+        }
+        // 頭 (左端)
+        const headY = bodyY + Math.sin(wave) * 4;
+        ctx.fillStyle = '#5aaa4a';
         ctx.beginPath();
-        ctx.moveTo(o.x, o.y - 10);
-        ctx.lineTo(o.x + o.w/2, o.y - o.h);
-        ctx.lineTo(o.x + o.w, o.y - 10);
-        ctx.closePath();
+        ctx.ellipse(o.x + 4, headY, 8, o.h * 0.55, 0, 0, Math.PI*2);
         ctx.fill();
+        // 目
+        ctx.fillStyle = '#ffd84d';
+        ctx.fillRect(o.x + 2, headY - 4, 3, 3);
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(o.x + 3, headY - 3, 1, 2);
+        // 舌
+        const tongueLen = (Math.floor(wave * 2) % 4 < 2) ? 8 : 4;
         ctx.fillStyle = '#ff5e87';
-        ctx.fillRect(o.x + o.w/2 - 2, o.y - o.h + 4, 4, 8);
+        ctx.fillRect(o.x - tongueLen, headY, tongueLen, 1.5);
+        ctx.fillRect(o.x - tongueLen - 2, headY - 1, 2, 1.5);
+        ctx.fillRect(o.x - tongueLen - 2, headY + 1, 2, 1.5);
+      } else if (o.kind === 'bird') {
+        // 鳥: 体 + 羽ばたく翼 + くちばし
+        const wing = Math.sin(o.t * 1.6) * 8;
+        const cx = o.x + o.w / 2;
+        const cy = o.y - o.h / 2;
+        // 翼 (奥)
+        ctx.fillStyle = '#2c2c3a';
+        ctx.beginPath();
+        ctx.moveTo(cx - 4, cy);
+        ctx.lineTo(cx - 18, cy - wing);
+        ctx.lineTo(cx - 8, cy + 2);
+        ctx.closePath();
+        ctx.fill();
+        // 体
+        ctx.fillStyle = '#4a4a5a';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, o.w/2 - 2, o.h/3, 0, 0, Math.PI*2);
+        ctx.fill();
+        // お腹
+        ctx.fillStyle = '#7a7a8a';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy + 2, o.w/2 - 6, o.h/4, 0, 0, Math.PI*2);
+        ctx.fill();
+        // 翼 (手前)
+        ctx.fillStyle = '#3a3a4a';
+        ctx.beginPath();
+        ctx.moveTo(cx + 2, cy);
+        ctx.lineTo(cx + 14, cy - wing - 2);
+        ctx.lineTo(cx + 6, cy + 4);
+        ctx.closePath();
+        ctx.fill();
+        // 尾羽 (右)
+        ctx.fillStyle = '#3a3a4a';
+        ctx.beginPath();
+        ctx.moveTo(cx + o.w/2 - 4, cy);
+        ctx.lineTo(cx + o.w/2 + 4, cy - 4);
+        ctx.lineTo(cx + o.w/2 + 4, cy + 4);
+        ctx.closePath();
+        ctx.fill();
+        // くちばし (左 = 進行方向)
+        ctx.fillStyle = '#ffaa3a';
+        ctx.beginPath();
+        ctx.moveTo(cx - o.w/2 + 2, cy);
+        ctx.lineTo(cx - o.w/2 - 6, cy - 2);
+        ctx.lineTo(cx - o.w/2 - 6, cy + 2);
+        ctx.closePath();
+        ctx.fill();
+        // 目
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(cx - o.w/2 + 8, cy - 2, 2.5, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(cx - o.w/2 + 7, cy - 2, 1.4, 0, Math.PI*2);
+        ctx.fill();
       }
     }
   }
@@ -944,6 +1094,57 @@
     }
   }
 
+  function drawMatatabis() {
+    for (const m of matatabis) {
+      const bob = Math.sin(m.t) * 3;
+      const cx = m.x, cy = m.y + bob;
+      // 光のオーラ
+      const auraR = 18 + Math.sin(m.t * 2) * 3;
+      const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, auraR);
+      grad.addColorStop(0, 'rgba(220,255,160,0.6)');
+      grad.addColorStop(1, 'rgba(220,255,160,0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, auraR, 0, Math.PI*2);
+      ctx.fill();
+      // 茎
+      ctx.strokeStyle = '#5a8a3a';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + 8);
+      ctx.lineTo(cx, cy - 4);
+      ctx.stroke();
+      // 葉 (3枚)
+      ctx.fillStyle = '#5aa840';
+      ctx.beginPath();
+      ctx.ellipse(cx - 8, cy - 1, 9, 5, -0.4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(cx + 8, cy - 1, 9, 5, 0.4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#7ac460';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy - 8, 7, 6, 0, 0, Math.PI*2);
+      ctx.fill();
+      // 葉脈
+      ctx.strokeStyle = '#3a7028';
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(cx - 14, cy - 2); ctx.lineTo(cx - 2, cy);
+      ctx.moveTo(cx + 14, cy - 2); ctx.lineTo(cx + 2, cy);
+      ctx.moveTo(cx, cy - 13); ctx.lineTo(cx, cy - 5);
+      ctx.stroke();
+      // キラキラ
+      const sp = Math.abs(Math.sin(m.t * 2));
+      ctx.fillStyle = `rgba(255, 255, 200, ${0.4 + 0.6 * sp})`;
+      ctx.fillRect(cx - 16, cy - 14, 2, 2);
+      ctx.fillRect(cx + 14, cy - 10, 2, 2);
+      ctx.fillRect(cx + 4, cy - 18, 2, 2);
+      ctx.fillRect(cx - 6, cy + 6, 2, 2);
+    }
+  }
+
   function drawParticles() {
     for (const p of particles) {
       ctx.globalAlpha = Math.max(0, p.life / 30);
@@ -957,6 +1158,7 @@
     drawBackground();
     drawGround();
     drawFish();
+    drawMatatabis();
     drawObstacles();
     drawPlayer();
     drawParticles();
