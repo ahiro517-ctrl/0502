@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="theme-color" content="#1b1f3a" />
+<title>ニンジャ・ラン</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", "Yu Gothic", sans-serif;
+    color: #fff;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+  #wrap {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1b1f3a;
+  }
+  canvas {
+    display: block;
+    background: linear-gradient(#1b2a55 0%, #4a3a78 60%, #c66a8a 100%);
+    touch-action: none;
+    image-rendering: pixelated;
+    box-shadow: 0 0 40px rgba(0,0,0,0.4);
+  }
+  #hud {
+    position: absolute;
+    top: env(safe-area-inset-top, 12px);
+    left: 0; right: 0;
+    padding: 12px 18px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+    font-weight: 700;
+    font-size: 18px;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    letter-spacing: 1px;
+  }
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10, 12, 30, 0.55);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    text-align: center;
+    padding: 20px;
+  }
+  #overlay.hidden { display: none; }
+  #overlay h1 {
+    font-size: clamp(28px, 8vw, 48px);
+    margin-bottom: 8px;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.7);
+  }
+  #overlay p {
+    font-size: clamp(14px, 3.6vw, 18px);
+    margin-bottom: 24px;
+    opacity: 0.9;
+    line-height: 1.6;
+  }
+  #overlay button {
+    font: inherit;
+    font-weight: 700;
+    font-size: clamp(16px, 4.2vw, 20px);
+    padding: 14px 36px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ffb84d, #ff5e87);
+    color: #fff;
+    box-shadow: 0 6px 20px rgba(255,94,135,0.5);
+    cursor: pointer;
+    transition: transform 0.1s ease;
+  }
+  #overlay button:active { transform: scale(0.96); }
+  .small { font-size: clamp(12px, 3vw, 14px); opacity: 0.7; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div id="score">0 m</div>
+    <div id="best">BEST 0 m</div>
+  </div>
+  <div id="overlay">
+    <h1>ニンジャ・ラン</h1>
+    <p>画面をタップでジャンプ<br>長押しで大ジャンプ<br>障害物をよけて走り抜けろ！</p>
+    <button id="startBtn">スタート</button>
+    <div class="small">タップして開始</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const overlay = document.getElementById('overlay');
+  const startBtn = document.getElementById('startBtn');
+  const scoreEl = document.getElementById('score');
+  const bestEl = document.getElementById('best');
+
+  // ---- 仮想解像度（描画は固定 → CSSでフィット） ----
+  const VW = 480;
+  const VH = 800;
+  canvas.width = VW;
+  canvas.height = VH;
+
+  function fit() {
+    const ww = window.innerWidth;
+    const wh = window.innerHeight;
+    const scale = Math.min(ww / VW, wh / VH);
+    canvas.style.width = (VW * scale) + 'px';
+    canvas.style.height = (VH * scale) + 'px';
+  }
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', fit);
+  fit();
+
+  // ---- ゲーム状態 ----
+  const GROUND_Y = VH - 120;
+  const GRAVITY = 0.9;
+  const JUMP_V = -15;
+  const JUMP_HOLD_V = -0.55; // 長押し中の追加上昇
+  const MAX_HOLD_FRAMES = 14;
+  const BASE_SPEED = 5.5;
+
+  let state = 'menu'; // menu | playing | dead
+  let speed, distance, frame, holdFrames, jumping, jumpHold;
+  let player, obstacles, coins, particles, clouds, mountains, ground;
+  let bestDistance = +(localStorage.getItem('ninjaRunBest') || 0);
+  bestEl.textContent = 'BEST ' + Math.floor(bestDistance) + ' m';
+
+  function reset() {
+    speed = BASE_SPEED;
+    distance = 0;
+    frame = 0;
+    holdFrames = 0;
+    jumping = false;
+    jumpHold = false;
+    player = {
+      x: 90, y: GROUND_Y, w: 40, h: 56,
+      vy: 0, onGround: true, runFrame: 0
+    };
+    obstacles = [];
+    coins = [];
+    particles = [];
+    clouds = makeClouds();
+    mountains = makeMountains();
+    ground = [];
+    spawnObstacleTimer = 90;
+    spawnCoinTimer = 60;
+  }
+
+  function makeClouds() {
+    const arr = [];
+    for (let i = 0; i < 5; i++) {
+      arr.push({ x: Math.random() * VW, y: 60 + Math.random() * 140, r: 20 + Math.random() * 25 });
+    }
+    return arr;
+  }
+  function makeMountains() {
+    const arr = [];
+    for (let i = 0; i < 6; i++) {
+      arr.push({ x: i * 120, y: GROUND_Y - 40, w: 180, h: 120 + Math.random() * 80 });
+    }
+    return arr;
+  }
+
+  let spawnObstacleTimer = 90;
+  let spawnCoinTimer = 60;
+
+  function spawnObstacle() {
+    const type = Math.random();
+    if (type < 0.55) {
+      // 低い障害物 (岩)
+      const w = 28 + Math.random() * 18;
+      obstacles.push({ x: VW + 20, y: GROUND_Y - 28, w, h: 32, kind: 'rock' });
+    } else if (type < 0.8) {
+      // 高い障害物 (杭)
+      obstacles.push({ x: VW + 20, y: GROUND_Y - 56, w: 26, h: 60, kind: 'spike' });
+    } else {
+      // 連続岩
+      obstacles.push({ x: VW + 20, y: GROUND_Y - 24, w: 30, h: 28, kind: 'rock' });
+      obstacles.push({ x: VW + 70, y: GROUND_Y - 24, w: 30, h: 28, kind: 'rock' });
+    }
+  }
+  function spawnCoin() {
+    const high = Math.random() < 0.5;
+    const yBase = high ? GROUND_Y - 130 : GROUND_Y - 60;
+    const count = 3 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < count; i++) {
+      coins.push({ x: VW + 20 + i * 30, y: yBase, r: 10, taken: false, t: 0 });
+    }
+  }
+
+  // ---- 入力 ----
+  function pressStart(e) {
+    if (e) e.preventDefault();
+    if (state === 'menu' || state === 'dead') {
+      startGame();
+      return;
+    }
+    if (state === 'playing') {
+      if (player.onGround) {
+        player.vy = JUMP_V;
+        player.onGround = false;
+        jumping = true;
+        holdFrames = 0;
+        jumpHold = true;
+        // ジャンプ煙
+        for (let i = 0; i < 8; i++) {
+          particles.push({
+            x: player.x + player.w/2, y: player.y,
+            vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 2,
+            life: 20, color: '#ddd'
+          });
+        }
+      }
+    }
+  }
+  function pressEnd(e) {
+    if (e) e.preventDefault();
+    jumpHold = false;
+  }
+
+  canvas.addEventListener('touchstart', pressStart, { passive: false });
+  canvas.addEventListener('touchend', pressEnd, { passive: false });
+  canvas.addEventListener('touchcancel', pressEnd, { passive: false });
+  canvas.addEventListener('mousedown', pressStart);
+  canvas.addEventListener('mouseup', pressEnd);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      e.preventDefault();
+      pressStart();
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowUp') {
+      pressEnd();
+    }
+  });
+
+  startBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startGame();
+  });
+
+  function startGame() {
+    reset();
+    state = 'playing';
+    overlay.classList.add('hidden');
+  }
+
+  function gameOver() {
+    state = 'dead';
+    if (distance > bestDistance) {
+      bestDistance = distance;
+      localStorage.setItem('ninjaRunBest', Math.floor(distance));
+    }
+    bestEl.textContent = 'BEST ' + Math.floor(bestDistance) + ' m';
+    overlay.querySelector('h1').textContent = 'ゲームオーバー';
+    overlay.querySelector('p').innerHTML =
+      `スコア <b>${Math.floor(distance)} m</b><br>ベスト <b>${Math.floor(bestDistance)} m</b>`;
+    startBtn.textContent = 'もう一度';
+    overlay.classList.remove('hidden');
+  }
+
+  // ---- 当たり判定 ----
+  function aabb(a, b) {
+    return a.x < b.x + b.w && a.x + a.w > b.x &&
+           a.y - a.h < b.y && a.y > b.y - b.h;
+  }
+
+  // ---- 更新 ----
+  function update() {
+    frame++;
+    distance += speed * 0.1;
+    speed = BASE_SPEED + Math.min(distance / 90, 6);
+
+    // プレイヤー
+    if (jumpHold && jumping && holdFrames < MAX_HOLD_FRAMES && player.vy < 0) {
+      player.vy += JUMP_HOLD_V;
+      holdFrames++;
+    }
+    player.vy += GRAVITY;
+    player.y += player.vy;
+    if (player.y >= GROUND_Y) {
+      player.y = GROUND_Y;
+      player.vy = 0;
+      if (!player.onGround) {
+        // 着地煙
+        for (let i = 0; i < 6; i++) {
+          particles.push({
+            x: player.x + player.w/2 + (Math.random()-0.5)*20,
+            y: GROUND_Y, vx: (Math.random()-0.5)*3, vy: -Math.random()*1.5,
+            life: 18, color: '#cfcfcf'
+          });
+        }
+      }
+      player.onGround = true;
+      jumping = false;
+    }
+    player.runFrame = (player.runFrame + 0.3) % 4;
+
+    // 走り煙
+    if (player.onGround && frame % 6 === 0) {
+      particles.push({
+        x: player.x, y: GROUND_Y,
+        vx: -1 - Math.random(), vy: -Math.random() * 0.8,
+        life: 14, color: '#9ea3b8'
+      });
+    }
+
+    // 障害物
+    spawnObstacleTimer--;
+    if (spawnObstacleTimer <= 0) {
+      spawnObstacle();
+      spawnObstacleTimer = 60 + Math.floor(Math.random() * 50) - Math.min(20, distance / 50);
+      spawnObstacleTimer = Math.max(35, spawnObstacleTimer);
+    }
+    for (const o of obstacles) o.x -= speed;
+    obstacles = obstacles.filter(o => o.x + o.w > -10);
+
+    // コイン
+    spawnCoinTimer--;
+    if (spawnCoinTimer <= 0) {
+      spawnCoin();
+      spawnCoinTimer = 90 + Math.floor(Math.random() * 80);
+    }
+    for (const c of coins) {
+      c.x -= speed;
+      c.t += 0.2;
+    }
+    coins = coins.filter(c => c.x > -20 && !c.taken);
+
+    // コイン取得
+    for (const c of coins) {
+      const dx = (player.x + player.w/2) - c.x;
+      const dy = (player.y - player.h/2) - c.y;
+      if (dx*dx + dy*dy < (c.r + 22) * (c.r + 22)) {
+        c.taken = true;
+        distance += 5; // ボーナス
+        for (let i = 0; i < 10; i++) {
+          particles.push({
+            x: c.x, y: c.y,
+            vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4,
+            life: 22, color: '#ffd84d'
+          });
+        }
+      }
+    }
+
+    // 当たり判定
+    const pBox = { x: player.x + 6, y: player.y - 4, w: player.w - 12, h: player.h - 8 };
+    for (const o of obstacles) {
+      if (aabb(pBox, o)) {
+        // 死亡パーティクル
+        for (let i = 0; i < 24; i++) {
+          particles.push({
+            x: player.x + player.w/2,
+            y: player.y - player.h/2,
+            vx: (Math.random()-0.5)*6,
+            vy: (Math.random()-0.5)*6 - 2,
+            life: 30, color: '#ff5e87'
+          });
+        }
+        gameOver();
+        return;
+      }
+    }
+
+    // 背景
+    for (const cl of clouds) {
+      cl.x -= speed * 0.15;
+      if (cl.x < -40) { cl.x = VW + 40; cl.y = 60 + Math.random() * 140; cl.r = 20 + Math.random() * 25; }
+    }
+    for (const m of mountains) {
+      m.x -= speed * 0.4;
+      if (m.x + m.w < 0) { m.x += mountains.length * 120; m.h = 120 + Math.random() * 80; }
+    }
+
+    // パーティクル
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.15;
+      p.life--;
+    }
+    particles = particles.filter(p => p.life > 0);
+
+    scoreEl.textContent = Math.floor(distance) + ' m';
+  }
+
+  // ---- 描画 ----
+  function drawBackground() {
+    // 空グラデは canvas 背景任せ → 透明で消す
+    ctx.clearRect(0, 0, VW, VH);
+    const g = ctx.createLinearGradient(0, 0, 0, VH);
+    g.addColorStop(0, '#1b2a55');
+    g.addColorStop(0.55, '#7a4a98');
+    g.addColorStop(1, '#ff8a7a');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, VW, VH);
+
+    // 月
+    ctx.fillStyle = 'rgba(255, 240, 200, 0.95)';
+    ctx.beginPath();
+    ctx.arc(VW - 90, 110, 38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(120, 90, 140, 0.6)';
+    ctx.beginPath();
+    ctx.arc(VW - 78, 100, 32, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 雲
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    for (const c of clouds) {
+      ctx.beginPath();
+      ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
+      ctx.arc(c.x + c.r*0.7, c.y + 4, c.r * 0.8, 0, Math.PI*2);
+      ctx.arc(c.x - c.r*0.7, c.y + 6, c.r * 0.7, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // 山
+    for (const m of mountains) {
+      ctx.fillStyle = '#3b2a5a';
+      ctx.beginPath();
+      ctx.moveTo(m.x, m.y);
+      ctx.lineTo(m.x + m.w/2, m.y - m.h);
+      ctx.lineTo(m.x + m.w, m.y);
+      ctx.closePath();
+      ctx.fill();
+      // 雪
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(m.x + m.w/2 - 18, m.y - m.h + 30);
+      ctx.lineTo(m.x + m.w/2, m.y - m.h);
+      ctx.lineTo(m.x + m.w/2 + 18, m.y - m.h + 30);
+      ctx.lineTo(m.x + m.w/2 + 6, m.y - m.h + 28);
+      ctx.lineTo(m.x + m.w/2, m.y - m.h + 18);
+      ctx.lineTo(m.x + m.w/2 - 6, m.y - m.h + 28);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function drawGround() {
+    // 地面
+    ctx.fillStyle = '#2a1a3a';
+    ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
+    // ハイライト線
+    ctx.fillStyle = '#ff8a7a';
+    ctx.fillRect(0, GROUND_Y, VW, 3);
+    // スクロール模様
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
+    const off = (frame * speed) % 40;
+    for (let x = -off; x < VW; x += 40) {
+      ctx.fillRect(x, GROUND_Y + 30, 20, 3);
+      ctx.fillRect(x + 10, GROUND_Y + 60, 14, 3);
+    }
+  }
+
+  function drawPlayer() {
+    const x = player.x;
+    const y = player.y;
+    const w = player.w;
+    const h = player.h;
+    const fr = Math.floor(player.runFrame);
+    const onGround = player.onGround;
+
+    // 影
+    if (onGround) {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.beginPath();
+      ctx.ellipse(x + w/2, GROUND_Y + 4, 22, 5, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    // 体（忍者）
+    ctx.save();
+    ctx.translate(x, y);
+
+    // 足
+    ctx.fillStyle = '#1f1f2a';
+    if (onGround) {
+      const legA = (fr === 0 || fr === 2) ? 0 : 6;
+      const legB = (fr === 0 || fr === 2) ? 6 : 0;
+      ctx.fillRect(8, -8, 10, 8 + legA);
+      ctx.fillRect(22, -8, 10, 8 + legB);
+    } else {
+      // ジャンプ中: 折りたたみ脚
+      ctx.fillRect(6, -14, 10, 10);
+      ctx.fillRect(24, -14, 10, 10);
+    }
+
+    // 胴体
+    ctx.fillStyle = '#3a2a5e';
+    ctx.fillRect(6, -h + 16, w - 12, h - 24);
+
+    // 帯
+    ctx.fillStyle = '#ff5e87';
+    ctx.fillRect(6, -h + 36, w - 12, 6);
+
+    // 頭
+    ctx.fillStyle = '#f4d4b8';
+    ctx.fillRect(10, -h, w - 20, 20);
+    // 目隠し
+    ctx.fillStyle = '#1b1b2a';
+    ctx.fillRect(8, -h + 6, w - 16, 8);
+    // 目
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(14, -h + 8, 4, 4);
+    ctx.fillRect(24, -h + 8, 4, 4);
+
+    // 腕
+    ctx.fillStyle = '#3a2a5e';
+    if (onGround) {
+      const armSwing = (fr === 0 || fr === 2) ? -2 : 4;
+      ctx.fillRect(-2, -h + 22, 8, 18 + armSwing);
+      ctx.fillRect(w - 6, -h + 22, 8, 18 - armSwing);
+    } else {
+      ctx.fillRect(-4, -h + 18, 8, 14);
+      ctx.fillRect(w - 4, -h + 18, 8, 14);
+    }
+
+    // 手裏剣 (背中)
+    ctx.fillStyle = '#bcd';
+    ctx.save();
+    ctx.translate(w/2, -h + 30);
+    ctx.rotate(frame * 0.2);
+    ctx.fillRect(-6, -1, 12, 2);
+    ctx.fillRect(-1, -6, 2, 12);
+    ctx.restore();
+
+    ctx.restore();
+  }
+
+  function drawObstacles() {
+    for (const o of obstacles) {
+      if (o.kind === 'rock') {
+        ctx.fillStyle = '#5a4a6a';
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y);
+        ctx.lineTo(o.x, o.y - o.h * 0.7);
+        ctx.lineTo(o.x + o.w * 0.4, o.y - o.h);
+        ctx.lineTo(o.x + o.w, o.y - o.h * 0.6);
+        ctx.lineTo(o.x + o.w, o.y);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#7a6a8a';
+        ctx.fillRect(o.x + 4, o.y - o.h * 0.7, 6, 4);
+      } else if (o.kind === 'spike') {
+        ctx.fillStyle = '#222';
+        ctx.fillRect(o.x + o.w/2 - 3, o.y - 10, 6, 10);
+        ctx.fillStyle = '#c0c0d0';
+        ctx.beginPath();
+        ctx.moveTo(o.x, o.y - 10);
+        ctx.lineTo(o.x + o.w/2, o.y - o.h);
+        ctx.lineTo(o.x + o.w, o.y - 10);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ff5e87';
+        ctx.fillRect(o.x + o.w/2 - 2, o.y - o.h + 4, 4, 8);
+      }
+    }
+  }
+
+  function drawCoins() {
+    for (const c of coins) {
+      const flick = Math.abs(Math.sin(c.t));
+      const r = c.r * (0.6 + 0.4 * flick);
+      ctx.fillStyle = '#b87a00';
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, r, c.r, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, r * 0.7, c.r * 0.85, 0, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#fff5b8';
+      ctx.fillRect(c.x - r*0.3, c.y - c.r*0.5, r * 0.2, c.r * 0.5);
+    }
+  }
+
+  function drawParticles() {
+    for (const p of particles) {
+      ctx.globalAlpha = Math.max(0, p.life / 30);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function render() {
+    drawBackground();
+    drawGround();
+    drawCoins();
+    drawObstacles();
+    drawPlayer();
+    drawParticles();
+  }
+
+  // ---- メインループ ----
+  function loop() {
+    if (state === 'playing') update();
+    render();
+    requestAnimationFrame(loop);
+  }
+  reset();
+  render();
+  requestAnimationFrame(loop);
+
+  // 起動時の自動再生防止: 最初のタップで開始
+  overlay.addEventListener('click', (e) => {
+    if (e.target === startBtn) return;
+    startGame();
+  });
+})();
+</script>
+</body>
+</html>
