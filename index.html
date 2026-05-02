@@ -1850,6 +1850,164 @@
     }
   }
 
+  // ---- ゲームオーバー演出 (鳥とヘビにいじめられる) ----
+  function drawDeadScene() {
+    // 暗めの夕焼け背景
+    const g = ctx.createLinearGradient(0, 0, 0, VH);
+    g.addColorStop(0, '#1a0e2a');
+    g.addColorStop(0.5, '#5a2a3a');
+    g.addColorStop(1, '#8a3a3a');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, VW, VH);
+
+    // 月
+    ctx.fillStyle = 'rgba(255, 230, 200, 0.85)';
+    ctx.beginPath();
+    ctx.arc(80, 110, 36, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(120, 60, 80, 0.5)';
+    ctx.beginPath();
+    ctx.arc(92, 102, 30, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 地面
+    ctx.fillStyle = '#1a0820';
+    ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
+    ctx.fillStyle = '#ff8a7a';
+    ctx.fillRect(0, GROUND_Y, VW, 3);
+
+    const t = frame * 0.05;
+
+    // ふらつく猫 (中央)
+    const cat = CHARACTERS[selectedChar];
+    const cx = VW / 2;
+    const sway = Math.sin(t * 2) * 4;
+    const catX = cx - cat.w / 2 + sway;
+    const catY = GROUND_Y;
+    drawCat(ctx, catX, catY, cat.w, cat.h, 0, true, cat, frame, true);
+
+    // ぐるぐる目を上書き (頭の位置に)
+    const headCx = catX + cat.w / 2;
+    const headCy = catY - cat.h + cat.h * 0.2;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(headCx - cat.w * 0.18, headCy, cat.w * 0.1, 0, Math.PI*2);
+    ctx.arc(headCx + cat.w * 0.18, headCy, cat.w * 0.1, 0, Math.PI*2);
+    ctx.fill();
+    ctx.strokeStyle = '#1a1a2e';
+    ctx.lineWidth = 1.5;
+    [-1, 1].forEach(side => {
+      ctx.beginPath();
+      const ex = headCx + side * cat.w * 0.18;
+      for (let a = 0; a < Math.PI * 4; a += 0.3) {
+        const r = 0.5 + a * 0.4;
+        const px = ex + Math.cos(a) * r;
+        const py = headCy + Math.sin(a) * r;
+        if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    });
+
+    // 苦しみマーク (キャラの上)
+    ctx.fillStyle = '#ffd84d';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('×﹏×', headCx, catY - cat.h - 14 - Math.abs(Math.sin(t * 2)) * 4);
+    ctx.textAlign = 'start';
+
+    // ヘビ (左で煽る、舌を出す)
+    const snakeWave = Math.sin(t * 2) * 3;
+    ctx.fillStyle = '#4a8a3a';
+    ctx.beginPath();
+    ctx.ellipse(cx - 80, GROUND_Y - 12 + snakeWave, 36, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#5aaa4a';
+    ctx.beginPath();
+    ctx.ellipse(cx - 50, GROUND_Y - 12 + snakeWave, 10, 8, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillRect(cx - 46, GROUND_Y - 18 + snakeWave, 3, 3);
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(cx - 45, GROUND_Y - 17 + snakeWave, 1, 2);
+    // 舌
+    const tongueOut = (Math.floor(t * 3) % 4 < 2) ? 12 : 6;
+    ctx.fillStyle = '#ff5e87';
+    ctx.fillRect(cx - 40, GROUND_Y - 13 + snakeWave, tongueOut, 1.5);
+    ctx.fillRect(cx - 40 + tongueOut, GROUND_Y - 14 + snakeWave, 3, 1.5);
+    ctx.fillRect(cx - 40 + tongueOut, GROUND_Y - 12 + snakeWave, 3, 1.5);
+    // ヘビの縞
+    ctx.fillStyle = '#2a6a1a';
+    for (let i = -100; i < -56; i += 10) {
+      ctx.fillRect(cx + i, GROUND_Y - 18 + snakeWave, 3, 12);
+    }
+
+    // 鳥 (上空でつつく)
+    const wing = Math.sin(t * 4) * 8;
+    const bcx = cx + 30;
+    const bcy = GROUND_Y - 70 + Math.sin(t * 1.5) * 6;
+    // 翼 奥
+    ctx.fillStyle = '#2c2c3a';
+    ctx.beginPath();
+    ctx.moveTo(bcx - 4, bcy);
+    ctx.lineTo(bcx - 22, bcy - wing);
+    ctx.lineTo(bcx - 8, bcy + 2);
+    ctx.closePath();
+    ctx.fill();
+    // 体
+    ctx.fillStyle = '#4a4a5a';
+    ctx.beginPath();
+    ctx.ellipse(bcx, bcy, 18, 12, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#7a7a8a';
+    ctx.beginPath();
+    ctx.ellipse(bcx, bcy + 2, 14, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    // 翼 手前
+    ctx.fillStyle = '#3a3a4a';
+    ctx.beginPath();
+    ctx.moveTo(bcx + 2, bcy);
+    ctx.lineTo(bcx + 18, bcy - wing - 2);
+    ctx.lineTo(bcx + 6, bcy + 4);
+    ctx.closePath();
+    ctx.fill();
+    // くちばし (下向きに猫をつつく)
+    const peck = Math.abs(Math.sin(t * 4)) * 8;
+    ctx.fillStyle = '#ffaa3a';
+    ctx.beginPath();
+    ctx.moveTo(bcx - 4, bcy + 12);
+    ctx.lineTo(bcx, bcy + 22 + peck);
+    ctx.lineTo(bcx + 4, bcy + 12);
+    ctx.closePath();
+    ctx.fill();
+    // 目
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(bcx - 4, bcy - 2, 2.5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.arc(bcx - 5, bcy - 2, 1.4, 0, Math.PI*2);
+    ctx.fill();
+
+    // 「ピヨピヨ」「シャー」吹き出し
+    if (Math.floor(t) % 2 === 0) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ピヨピヨ♪', bcx + 18, bcy - 18);
+      ctx.fillText('シャー！', cx - 80, GROUND_Y - 30);
+      ctx.textAlign = 'start';
+    }
+
+    // 漂う羽根
+    for (let i = 0; i < 5; i++) {
+      const fy = (frame * 0.7 + i * 60) % 200;
+      const fx = cx + 50 + Math.sin(frame * 0.05 + i) * 30;
+      ctx.fillStyle = `rgba(180,180,200,${0.6 - fy/300})`;
+      ctx.fillRect(fx, GROUND_Y - 80 - fy, 4, 2);
+    }
+  }
+
   // ---- メインループ ----
   function loop() {
     if (state === 'playing') update();
