@@ -379,6 +379,51 @@ try {
   };
   let selectedChar = localStorage.getItem('nekoRunChar') || 'sabatora';
 
+  // ---- ステージ設定 ----
+  const STAGES = {
+    morning: {
+      name: '朝',
+      sky: ['#ffd49c', '#ffb88a', '#ffe6c8'],
+      sun:  { x: 100, y: 130, r: 36, color: '#fff5b8', glow: 'rgba(255,220,140,0.5)' },
+      moon: null,
+      cloudColor: 'rgba(255,255,255,0.85)',
+      mountainColor: '#8a6080',
+      mountainSnow: 'rgba(255,235,210,0.85)',
+      groundColor: '#3a2a3a',
+      groundLine: '#ffb88a',
+      groundPattern: 'rgba(255,255,255,0.10)',
+      hudShadow: 'rgba(40,20,30,0.6)'
+    },
+    noon: {
+      name: '昼',
+      sky: ['#4fa8df', '#9cd0ee', '#dceff5'],
+      sun:  { x: VW - 90, y: 110, r: 32, color: '#fffae0', glow: 'rgba(255,250,180,0.45)' },
+      moon: null,
+      cloudColor: 'rgba(255,255,255,0.95)',
+      mountainColor: '#5a6c80',
+      mountainSnow: 'rgba(255,255,255,0.85)',
+      groundColor: '#3c4a3a',
+      groundLine: '#a0d0a0',
+      groundPattern: 'rgba(255,255,255,0.10)',
+      hudShadow: 'rgba(20,40,60,0.6)'
+    },
+    night: {
+      name: '夜',
+      sky: ['#1b2a55', '#7a4a98', '#ff8a7a'],
+      sun: null,
+      moon: { x: VW - 90, y: 110, r: 38, color: 'rgba(255,240,200,0.95)', shade: 'rgba(120,90,140,0.6)' },
+      cloudColor: 'rgba(255,255,255,0.55)',
+      mountainColor: '#3b2a5a',
+      mountainSnow: 'rgba(255,255,255,0.7)',
+      groundColor: '#2a1a3a',
+      groundLine: '#ff8a7a',
+      groundPattern: 'rgba(255,255,255,0.08)',
+      hudShadow: 'rgba(0,0,0,0.6)'
+    }
+  };
+  let selectedStage = localStorage.getItem('nekoRunStage') || 'night';
+  if (!STAGES[selectedStage]) selectedStage = 'night';
+
   // ---- 仮想解像度（描画は固定 → CSSでフィット） ----
   const VW = 480;
   const VH = 800;
