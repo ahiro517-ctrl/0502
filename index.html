@@ -6,9 +6,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#1b1f3a" />
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-<meta http-equiv="Pragma" content="no-cache" />
-<meta http-equiv="Expires" content="0" />
 <title>ねこラン</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -237,14 +234,6 @@
 </div>
 
 <script>
-window.addEventListener('error', (e) => {
-  const box = document.getElementById('errorBox');
-  if (box) {
-    box.textContent = 'エラー: ' + e.message + '\n@ ' + (e.filename || '') + ':' + (e.lineno || '');
-    box.classList.remove('hidden');
-  }
-});
-try {
 (() => {
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -1587,14 +1576,6 @@ try {
     startGame();
   });
 })();
-} catch (err) {
-  const box = document.getElementById('errorBox');
-  if (box) {
-    box.textContent = 'エラー: ' + (err && err.message ? err.message : String(err)) +
-      '\n' + (err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n') : '');
-    box.classList.remove('hidden');
-  }
-}
 </script>
 </body>
 </html>
