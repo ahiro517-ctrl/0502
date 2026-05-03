@@ -6,9 +6,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#1b1f3a" />
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-<meta http-equiv="Pragma" content="no-cache" />
-<meta http-equiv="Expires" content="0" />
 <title>ねこラン</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -199,82 +196,6 @@
     line-height: 1.5;
   }
   .titleList b { color: #ffd84d; }
-  #stageSelect {
-    display: flex;
-    gap: 10px;
-    margin: 0 0 18px 0;
-    justify-content: center;
-  }
-  .stage-btn {
-    background: rgba(255,255,255,0.08) !important;
-    border: 2px solid rgba(255,255,255,0.2) !important;
-    border-radius: 12px !important;
-    padding: 8px 14px !important;
-    font: inherit !important;
-    color: #fff !important;
-    box-shadow: none !important;
-    cursor: pointer;
-    display: flex !important;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    min-width: 72px;
-    transition: all 0.15s ease;
-  }
-  .stage-btn.selected {
-    border-color: #ffb84d !important;
-    background: rgba(255,184,77,0.18) !important;
-    box-shadow: 0 0 18px rgba(255,184,77,0.35) !important;
-  }
-  .stage-swatch {
-    width: 50px; height: 28px;
-    border-radius: 6px;
-    border: 1px solid rgba(255,255,255,0.3);
-  }
-  .stage-name {
-    font-size: 13px;
-    font-weight: 700;
-  }
-  #slowBar {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    bottom: env(safe-area-inset-bottom, 14px);
-    background: rgba(0,0,0,0.4);
-    color: #aee0ff;
-    padding: 6px 14px;
-    border-radius: 999px;
-    font-weight: 700;
-    font-size: 14px;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-  }
-  #slowBar.hidden { opacity: 0; }
-  #buildTag {
-    position: absolute;
-    right: 6px; bottom: 6px;
-    font-size: 10px;
-    opacity: 0.5;
-    color: #fff;
-    pointer-events: none;
-    z-index: 10;
-  }
-  #errorBox {
-    position: absolute;
-    left: 10px; right: 10px; top: 10px;
-    padding: 12px;
-    background: rgba(220, 50, 50, 0.92);
-    color: #fff;
-    border-radius: 8px;
-    font-size: 12px;
-    line-height: 1.4;
-    z-index: 20;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-  #errorBox.hidden { display: none; }
 </style>
 </head>
 <body>
@@ -292,9 +213,6 @@
     <div class="badge-label">称号獲得</div>
     <div class="badge-name"></div>
   </div>
-  <div id="slowBar" class="hidden">SLOW</div>
-  <div id="buildTag">v8</div>
-  <div id="errorBox" class="hidden"></div>
   <div id="overlay">
     <h1>ねこラン</h1>
     <p id="overlayMsg">キャラを選んでスタート<br><span style="font-size:0.85em;opacity:0.8">タップでジャンプ・空中で再タップで二段ジャンプ<br>マタタビを取ると無敵に</span></p>
@@ -310,34 +228,12 @@
         <div class="char-desc">小さなサバトラ</div>
       </button>
     </div>
-    <div id="stageSelect">
-      <button class="stage-btn" data-stage="morning">
-        <div class="stage-swatch" style="background:linear-gradient(#ffd49c,#ffb88a 50%,#ffe0c4);"></div>
-        <div class="stage-name">朝</div>
-      </button>
-      <button class="stage-btn" data-stage="noon">
-        <div class="stage-swatch" style="background:linear-gradient(#5cb8e6,#aaddf0 60%,#dceff5);"></div>
-        <div class="stage-name">昼</div>
-      </button>
-      <button class="stage-btn" data-stage="night">
-        <div class="stage-swatch" style="background:linear-gradient(#1b2a55,#7a4a98 55%,#ff8a7a);"></div>
-        <div class="stage-name">夜</div>
-      </button>
-    </div>
     <button id="startBtn">スタート</button>
     <div class="small">タップして開始</div>
   </div>
 </div>
 
 <script>
-window.addEventListener('error', (e) => {
-  const box = document.getElementById('errorBox');
-  if (box) {
-    box.textContent = 'エラー: ' + e.message + '\n@ ' + (e.filename || '') + ':' + (e.lineno || '');
-    box.classList.remove('hidden');
-  }
-});
-try {
 (() => {
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
@@ -379,99 +275,9 @@ try {
   };
   let selectedChar = localStorage.getItem('nekoRunChar') || 'sabatora';
 
-  // ---- ステージ設定 ----
-  const STAGES = {
-    morning: {
-      name: '朝',
-      sky: ['#ffd49c', '#ffb88a', '#ffe6c8'],
-      sun:  { x: 100, y: 130, r: 36, color: '#fff5b8', glow: 'rgba(255,220,140,0.5)' },
-      moon: null,
-      cloudColor: 'rgba(255,255,255,0.85)',
-      mountainColor: '#8a6080',
-      mountainSnow: 'rgba(255,235,210,0.85)',
-      groundColor: '#3a2a3a',
-      groundLine: '#ffb88a',
-      groundPattern: 'rgba(255,255,255,0.10)',
-      hudShadow: 'rgba(40,20,30,0.6)'
-    },
-    noon: {
-      name: '昼',
-      sky: ['#4fa8df', '#9cd0ee', '#dceff5'],
-      sun:  { x: VW - 90, y: 110, r: 32, color: '#fffae0', glow: 'rgba(255,250,180,0.45)' },
-      moon: null,
-      cloudColor: 'rgba(255,255,255,0.95)',
-      mountainColor: '#5a6c80',
-      mountainSnow: 'rgba(255,255,255,0.85)',
-      groundColor: '#3c4a3a',
-      groundLine: '#a0d0a0',
-      groundPattern: 'rgba(255,255,255,0.10)',
-      hudShadow: 'rgba(20,40,60,0.6)'
-    },
-    night: {
-      name: '夜',
-      sky: ['#1b2a55', '#7a4a98', '#ff8a7a'],
-      sun: null,
-      moon: { x: VW - 90, y: 110, r: 38, color: 'rgba(255,240,200,0.95)', shade: 'rgba(120,90,140,0.6)' },
-      cloudColor: 'rgba(255,255,255,0.55)',
-      mountainColor: '#3b2a5a',
-      mountainSnow: 'rgba(255,255,255,0.7)',
-      groundColor: '#2a1a3a',
-      groundLine: '#ff8a7a',
-      groundPattern: 'rgba(255,255,255,0.08)',
-      hudShadow: 'rgba(0,0,0,0.6)'
-    }
-  };
-  let selectedStage = localStorage.getItem('nekoRunStage') || 'night';
-  if (!STAGES[selectedStage]) selectedStage = 'night';
-
   // ---- 仮想解像度（描画は固定 → CSSでフィット） ----
   const VW = 480;
   const VH = 800;
-
-  // ---- ステージ設定 ----
-  const STAGES = {
-    morning: {
-      name: '朝',
-      sky: ['#ffd49c', '#ffb88a', '#ffe6c8'],
-      sun:  { x: 100, y: 130, r: 36, color: '#fff5b8', glow: 'rgba(255,220,140,0.5)' },
-      moon: null,
-      cloudColor: 'rgba(255,255,255,0.85)',
-      mountainColor: '#8a6080',
-      mountainSnow: 'rgba(255,235,210,0.85)',
-      groundColor: '#3a2a3a',
-      groundLine: '#ffb88a',
-      groundPattern: 'rgba(255,255,255,0.10)',
-      hudShadow: 'rgba(40,20,30,0.6)'
-    },
-    noon: {
-      name: '昼',
-      sky: ['#4fa8df', '#9cd0ee', '#dceff5'],
-      sun:  { x: VW - 90, y: 110, r: 32, color: '#fffae0', glow: 'rgba(255,250,180,0.45)' },
-      moon: null,
-      cloudColor: 'rgba(255,255,255,0.95)',
-      mountainColor: '#5a6c80',
-      mountainSnow: 'rgba(255,255,255,0.85)',
-      groundColor: '#3c4a3a',
-      groundLine: '#a0d0a0',
-      groundPattern: 'rgba(255,255,255,0.10)',
-      hudShadow: 'rgba(20,40,60,0.6)'
-    },
-    night: {
-      name: '夜',
-      sky: ['#1b2a55', '#7a4a98', '#ff8a7a'],
-      sun: null,
-      moon: { x: VW - 90, y: 110, r: 38, color: 'rgba(255,240,200,0.95)', shade: 'rgba(120,90,140,0.6)' },
-      cloudColor: 'rgba(255,255,255,0.55)',
-      mountainColor: '#3b2a5a',
-      mountainSnow: 'rgba(255,255,255,0.7)',
-      groundColor: '#2a1a3a',
-      groundLine: '#ff8a7a',
-      groundPattern: 'rgba(255,255,255,0.08)',
-      hudShadow: 'rgba(0,0,0,0.6)'
-    }
-  };
-  let selectedStage = localStorage.getItem('nekoRunStage') || 'night';
-  if (!STAGES[selectedStage]) selectedStage = 'night';
   canvas.width = VW;
   canvas.height = VH;
 
@@ -496,10 +302,9 @@ try {
 
   let state = 'menu'; // menu | playing | dead
   let speed, distance, frame, holdFrames, jumping, jumpHold, jumpsLeft;
-  let player, obstacles, fishes, matatabis, hearts, chuus, particles, clouds, mountains, ground;
+  let player, obstacles, fishes, matatabis, hearts, particles, clouds, mountains, ground;
   let invincibleFrames = 0;
   let damageFlashFrames = 0;
-  let slowFrames = 0;
   let lives = 3;
   let fishRun = 0;
   let badgeToastFrames = 0;
@@ -524,7 +329,6 @@ try {
   // ライフ HUD
   const livesEl = document.getElementById('lives');
   const badgeToastEl = document.getElementById('badgeToast');
-  const slowBar = document.getElementById('slowBar');
   function renderLivesHud(bumpIdx) {
     livesEl.innerHTML = '';
     for (let i = 0; i < 3; i++) {
@@ -561,7 +365,6 @@ try {
     jumpsLeft = 2;
     invincibleFrames = 0;
     damageFlashFrames = 0;
-    slowFrames = 0;
     lives = 3;
     fishRun = 0;
     const c = CHARACTERS[selectedChar];
@@ -574,7 +377,6 @@ try {
     fishes = [];
     matatabis = [];
     hearts = [];
-    chuus = [];
     particles = [];
     clouds = makeClouds();
     mountains = makeMountains();
@@ -583,7 +385,6 @@ try {
     spawnFishTimer = 60;
     spawnMatatabiTimer = 600;
     spawnHeartTimer = 900;
-    spawnChuruTimer = 700;
     renderLivesHud();
     hideBadge();
   }
@@ -607,7 +408,6 @@ try {
   let spawnFishTimer = 60;
   let spawnMatatabiTimer = 600;
   let spawnHeartTimer = 900;
-  let spawnChuruTimer = 700;
 
   function spawnObstacle() {
     const type = Math.random();
@@ -643,10 +443,6 @@ try {
     if (lives >= 3) return;
     const y = GROUND_Y - 50 - Math.random() * 70;
     hearts.push({ x: VW + 20, y, t: 0, taken: false });
-  }
-  function spawnChuru() {
-    const y = GROUND_Y - 50 - Math.random() * 80;
-    chuus.push({ x: VW + 20, y, t: 0, taken: false });
   }
 
   // ---- 入力 ----
@@ -724,23 +520,6 @@ try {
   });
   setSelectedChar(selectedChar);
 
-  // ステージ選択
-  const stageButtons = document.querySelectorAll('.stage-btn');
-  function setSelectedStage(name) {
-    selectedStage = name;
-    localStorage.setItem('nekoRunStage', name);
-    stageButtons.forEach(b => {
-      b.classList.toggle('selected', b.dataset.stage === name);
-    });
-  }
-  stageButtons.forEach(b => {
-    b.addEventListener('click', (e) => {
-      e.stopPropagation();
-      setSelectedStage(b.dataset.stage);
-    });
-  });
-  setSelectedStage(selectedStage);
-
   // キャラプレビュー描画
   function renderCharPreviews() {
     document.querySelectorAll('.char-preview').forEach(cv => {
@@ -814,16 +593,8 @@ try {
   // ---- 更新 ----
   function update() {
     frame++;
+    distance += speed * 0.1;
     speed = BASE_SPEED + Math.min(distance / 90, 6);
-    if (slowFrames > 0) slowFrames--;
-    const moveSpeed = slowFrames > 0 ? speed * 0.5 : speed;
-    distance += moveSpeed * 0.1;
-    // SLOW HUD 表示
-    if (slowFrames > 0 && slowBar.classList.contains('hidden')) {
-      slowBar.classList.remove('hidden');
-    } else if (slowFrames === 0 && !slowBar.classList.contains('hidden')) {
-      slowBar.classList.add('hidden');
-    }
 
     // プレイヤー
     if (jumpHold && jumping && holdFrames < MAX_HOLD_FRAMES && player.vy < 0) {
@@ -868,7 +639,7 @@ try {
       spawnObstacleTimer = 60 + Math.floor(Math.random() * 50) - Math.min(20, distance / 50);
       spawnObstacleTimer = Math.max(35, spawnObstacleTimer);
     }
-    for (const o of obstacles) o.x -= moveSpeed;
+    for (const o of obstacles) o.x -= speed;
     obstacles = obstacles.filter(o => o.x + o.w > -10);
 
     // 魚
@@ -878,7 +649,7 @@ try {
       spawnFishTimer = 90 + Math.floor(Math.random() * 80);
     }
     for (const f of fishes) {
-      f.x -= moveSpeed;
+      f.x -= speed;
       f.t += 0.2;
     }
     fishes = fishes.filter(f => f.x > -30 && !f.taken);
@@ -917,7 +688,7 @@ try {
       spawnMatatabiTimer = 600 + Math.floor(Math.random() * 600); // 10〜20秒
     }
     for (const m of matatabis) {
-      m.x -= moveSpeed;
+      m.x -= speed;
       m.t += 0.15;
     }
     matatabis = matatabis.filter(m => m.x > -30 && !m.taken);
@@ -932,7 +703,7 @@ try {
           particles.push({
             x: m.x, y: m.y,
             vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5 - 1,
-            life: 30, color: '#d090ff'
+            life: 30, color: '#a8e060'
           });
         }
       }
@@ -945,7 +716,7 @@ try {
       spawnHeartTimer = 900 + Math.floor(Math.random() * 600); // 15〜25秒
     }
     for (const h of hearts) {
-      h.x -= moveSpeed;
+      h.x -= speed;
       h.t += 0.15;
     }
     hearts = hearts.filter(h => h.x > -30 && !h.taken);
@@ -964,34 +735,6 @@ try {
             x: h.x, y: h.y,
             vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4 - 1,
             life: 26, color: '#ff8aa8'
-          });
-        }
-      }
-    }
-
-    // チュール
-    spawnChuruTimer--;
-    if (spawnChuruTimer <= 0) {
-      spawnChuru();
-      spawnChuruTimer = 700 + Math.floor(Math.random() * 500); // 12〜20秒
-    }
-    for (const c of chuus) {
-      c.x -= moveSpeed;
-      c.t += 0.15;
-    }
-    chuus = chuus.filter(c => c.x > -30 && !c.taken);
-    for (const c of chuus) {
-      const dx = (player.x + player.w/2) - c.x;
-      const dy = (player.y - player.h/2) - c.y;
-      const grabR = Math.max(player.w, player.h) * 0.6;
-      if (dx*dx + dy*dy < grabR * grabR) {
-        c.taken = true;
-        slowFrames = 60 * 5; // 5秒スロー
-        for (let i = 0; i < 22; i++) {
-          particles.push({
-            x: c.x, y: c.y,
-            vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4 - 1,
-            life: 28, color: '#aee0ff'
           });
         }
       }
@@ -1051,11 +794,11 @@ try {
 
     // 背景
     for (const cl of clouds) {
-      cl.x -= moveSpeed * 0.15;
+      cl.x -= speed * 0.15;
       if (cl.x < -40) { cl.x = VW + 40; cl.y = 60 + Math.random() * 140; cl.r = 20 + Math.random() * 25; }
     }
     for (const m of mountains) {
-      m.x -= moveSpeed * 0.4;
+      m.x -= speed * 0.4;
       if (m.x + m.w < 0) { m.x += mountains.length * 120; m.h = 120 + Math.random() * 80; }
     }
 
@@ -1072,46 +815,27 @@ try {
 
   // ---- 描画 ----
   function drawBackground() {
-    const stg = STAGES[selectedStage];
+    // 空グラデは canvas 背景任せ → 透明で消す
     ctx.clearRect(0, 0, VW, VH);
     const g = ctx.createLinearGradient(0, 0, 0, VH);
-    g.addColorStop(0, stg.sky[0]);
-    g.addColorStop(0.55, stg.sky[1]);
-    g.addColorStop(1, stg.sky[2]);
+    g.addColorStop(0, '#1b2a55');
+    g.addColorStop(0.55, '#7a4a98');
+    g.addColorStop(1, '#ff8a7a');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, VW, VH);
 
-    // 太陽
-    if (stg.sun) {
-      const s = stg.sun;
-      // glow
-      const gg = ctx.createRadialGradient(s.x, s.y, s.r * 0.5, s.x, s.y, s.r * 2.5);
-      gg.addColorStop(0, s.glow);
-      gg.addColorStop(1, 'rgba(255,255,200,0)');
-      ctx.fillStyle = gg;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r * 2.5, 0, Math.PI*2);
-      ctx.fill();
-      ctx.fillStyle = s.color;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
-      ctx.fill();
-    }
     // 月
-    if (stg.moon) {
-      const m = stg.moon;
-      ctx.fillStyle = m.color;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
-      ctx.fill();
-      ctx.fillStyle = m.shade;
-      ctx.beginPath();
-      ctx.arc(m.x + 12, m.y - 10, m.r * 0.84, 0, Math.PI*2);
-      ctx.fill();
-    }
+    ctx.fillStyle = 'rgba(255, 240, 200, 0.95)';
+    ctx.beginPath();
+    ctx.arc(VW - 90, 110, 38, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(120, 90, 140, 0.6)';
+    ctx.beginPath();
+    ctx.arc(VW - 78, 100, 32, 0, Math.PI * 2);
+    ctx.fill();
 
     // 雲
-    ctx.fillStyle = stg.cloudColor;
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
     for (const c of clouds) {
       ctx.beginPath();
       ctx.arc(c.x, c.y, c.r, 0, Math.PI*2);
@@ -1121,38 +845,37 @@ try {
     }
 
     // 山
-    for (const mtn of mountains) {
-      ctx.fillStyle = stg.mountainColor;
+    for (const m of mountains) {
+      ctx.fillStyle = '#3b2a5a';
       ctx.beginPath();
-      ctx.moveTo(mtn.x, mtn.y);
-      ctx.lineTo(mtn.x + mtn.w/2, mtn.y - mtn.h);
-      ctx.lineTo(mtn.x + mtn.w, mtn.y);
+      ctx.moveTo(m.x, m.y);
+      ctx.lineTo(m.x + m.w/2, m.y - m.h);
+      ctx.lineTo(m.x + m.w, m.y);
       ctx.closePath();
       ctx.fill();
       // 雪
-      ctx.fillStyle = stg.mountainSnow;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.beginPath();
-      ctx.moveTo(mtn.x + mtn.w/2 - 18, mtn.y - mtn.h + 30);
-      ctx.lineTo(mtn.x + mtn.w/2, mtn.y - mtn.h);
-      ctx.lineTo(mtn.x + mtn.w/2 + 18, mtn.y - mtn.h + 30);
-      ctx.lineTo(mtn.x + mtn.w/2 + 6, mtn.y - mtn.h + 28);
-      ctx.lineTo(mtn.x + mtn.w/2, mtn.y - mtn.h + 18);
-      ctx.lineTo(mtn.x + mtn.w/2 - 6, mtn.y - mtn.h + 28);
+      ctx.moveTo(m.x + m.w/2 - 18, m.y - m.h + 30);
+      ctx.lineTo(m.x + m.w/2, m.y - m.h);
+      ctx.lineTo(m.x + m.w/2 + 18, m.y - m.h + 30);
+      ctx.lineTo(m.x + m.w/2 + 6, m.y - m.h + 28);
+      ctx.lineTo(m.x + m.w/2, m.y - m.h + 18);
+      ctx.lineTo(m.x + m.w/2 - 6, m.y - m.h + 28);
       ctx.closePath();
       ctx.fill();
     }
   }
 
   function drawGround() {
-    const stg = STAGES[selectedStage];
     // 地面
-    ctx.fillStyle = stg.groundColor;
+    ctx.fillStyle = '#2a1a3a';
     ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
     // ハイライト線
-    ctx.fillStyle = stg.groundLine;
+    ctx.fillStyle = '#ff8a7a';
     ctx.fillRect(0, GROUND_Y, VW, 3);
     // スクロール模様
-    ctx.fillStyle = stg.groundPattern;
+    ctx.fillStyle = 'rgba(255,255,255,0.08)';
     const off = (frame * speed) % 40;
     for (let x = -off; x < VW; x += 40) {
       ctx.fillRect(x, GROUND_Y + 30, 20, 3);
@@ -1163,13 +886,13 @@ try {
   function drawPlayer() {
     if (invincibleFrames > 0) {
       const auraT = frame * 0.15;
-      const auraR = Math.max(player.w, player.h) * 0.75 + Math.sin(auraT) * 5;
+      const auraR = Math.max(player.w, player.h) * 0.7 + Math.sin(auraT) * 4;
       const grad = ctx.createRadialGradient(
         player.x + player.w/2, player.y - player.h/2, 4,
         player.x + player.w/2, player.y - player.h/2, auraR
       );
-      grad.addColorStop(0, 'rgba(220,170,255,0.6)');
-      grad.addColorStop(1, 'rgba(180,100,255,0)');
+      grad.addColorStop(0, 'rgba(220,255,160,0.55)');
+      grad.addColorStop(1, 'rgba(220,255,160,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(player.x + player.w/2, player.y - player.h/2, auraR, 0, Math.PI*2);
@@ -1582,162 +1305,76 @@ try {
     for (const h of hearts) {
       const bob = Math.sin(h.t) * 3;
       const cx = h.x, cy = h.y + bob;
-      // ピンクのオーラ (大)
-      const auraR = 26 + Math.sin(h.t * 2) * 3;
-      const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, auraR);
-      grad.addColorStop(0, 'rgba(255,180,200,0.6)');
+      // ピンクのオーラ
+      const auraR = 16 + Math.sin(h.t * 2) * 2;
+      const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, auraR);
+      grad.addColorStop(0, 'rgba(255,180,200,0.55)');
       grad.addColorStop(1, 'rgba(255,180,200,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(cx, cy, auraR, 0, Math.PI*2);
       ctx.fill();
-      // 縁取り (白)
-      drawHeartShape(ctx, cx, cy, 20, '#fff');
       // 影
-      drawHeartShape(ctx, cx, cy + 2, 17, '#c83864');
+      drawHeartShape(ctx, cx, cy + 1, 11, '#c83864');
       // 本体
-      drawHeartShape(ctx, cx, cy, 17, '#ff5e87');
+      drawHeartShape(ctx, cx, cy, 11, '#ff5e87');
       // ハイライト
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
       ctx.beginPath();
-      ctx.ellipse(cx - 5, cy - 6, 3, 5, -0.3, 0, Math.PI*2);
+      ctx.ellipse(cx - 3, cy - 4, 2, 3, -0.3, 0, Math.PI*2);
       ctx.fill();
-      // キラリ
-      const sp = Math.abs(Math.sin(h.t * 2));
-      ctx.fillStyle = `rgba(255,255,255,${0.4 + 0.6 * sp})`;
-      ctx.fillRect(cx + 14, cy - 12, 2, 2);
-      ctx.fillRect(cx - 18, cy + 8, 2, 2);
     }
   }
 
   function drawMatatabis() {
     for (const m of matatabis) {
-      const bob = Math.sin(m.t) * 4;
+      const bob = Math.sin(m.t) * 3;
       const cx = m.x, cy = m.y + bob;
-      // 紫のオーラ (大)
-      const auraR = 30 + Math.sin(m.t * 2) * 4;
-      const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, auraR);
-      grad.addColorStop(0, 'rgba(220,170,255,0.65)');
-      grad.addColorStop(0.6, 'rgba(180,100,255,0.25)');
-      grad.addColorStop(1, 'rgba(180,100,255,0)');
+      // 光のオーラ
+      const auraR = 18 + Math.sin(m.t * 2) * 3;
+      const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, auraR);
+      grad.addColorStop(0, 'rgba(220,255,160,0.6)');
+      grad.addColorStop(1, 'rgba(220,255,160,0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(cx, cy, auraR, 0, Math.PI*2);
       ctx.fill();
       // 茎
-      ctx.strokeStyle = '#7a3aa8';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#5a8a3a';
+      ctx.lineWidth = 2;
       ctx.lineCap = 'round';
       ctx.beginPath();
-      ctx.moveTo(cx, cy + 14);
-      ctx.lineTo(cx, cy - 6);
+      ctx.moveTo(cx, cy + 8);
+      ctx.lineTo(cx, cy - 4);
       ctx.stroke();
-      // 葉 (3枚・大)
-      ctx.fillStyle = '#c46aff';
+      // 葉 (3枚)
+      ctx.fillStyle = '#5aa840';
       ctx.beginPath();
-      ctx.ellipse(cx - 14, cy - 2, 14, 8, -0.4, 0, Math.PI*2);
+      ctx.ellipse(cx - 8, cy - 1, 9, 5, -0.4, 0, Math.PI*2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(cx + 14, cy - 2, 14, 8, 0.4, 0, Math.PI*2);
+      ctx.ellipse(cx + 8, cy - 1, 9, 5, 0.4, 0, Math.PI*2);
       ctx.fill();
-      ctx.fillStyle = '#e0a4ff';
+      ctx.fillStyle = '#7ac460';
       ctx.beginPath();
-      ctx.ellipse(cx, cy - 14, 11, 9, 0, 0, Math.PI*2);
+      ctx.ellipse(cx, cy - 8, 7, 6, 0, 0, Math.PI*2);
       ctx.fill();
       // 葉脈
-      ctx.strokeStyle = '#4a1080';
-      ctx.lineWidth = 1.2;
+      ctx.strokeStyle = '#3a7028';
+      ctx.lineWidth = 0.8;
       ctx.beginPath();
-      ctx.moveTo(cx - 24, cy - 3); ctx.lineTo(cx - 4, cy);
-      ctx.moveTo(cx + 24, cy - 3); ctx.lineTo(cx + 4, cy);
-      ctx.moveTo(cx, cy - 22); ctx.lineTo(cx, cy - 6);
+      ctx.moveTo(cx - 14, cy - 2); ctx.lineTo(cx - 2, cy);
+      ctx.moveTo(cx + 14, cy - 2); ctx.lineTo(cx + 2, cy);
+      ctx.moveTo(cx, cy - 13); ctx.lineTo(cx, cy - 5);
       ctx.stroke();
-      // 中心の宝石
-      ctx.fillStyle = '#fff5ff';
-      ctx.beginPath();
-      ctx.arc(cx, cy + 1, 2.5, 0, Math.PI*2);
-      ctx.fill();
       // キラキラ
       const sp = Math.abs(Math.sin(m.t * 2));
-      ctx.fillStyle = `rgba(255, 220, 255, ${0.5 + 0.5 * sp})`;
-      ctx.fillRect(cx - 26, cy - 20, 3, 3);
-      ctx.fillRect(cx + 22, cy - 14, 3, 3);
-      ctx.fillRect(cx + 8, cy - 26, 3, 3);
-      ctx.fillRect(cx - 8, cy + 12, 3, 3);
+      ctx.fillStyle = `rgba(255, 255, 200, ${0.4 + 0.6 * sp})`;
+      ctx.fillRect(cx - 16, cy - 14, 2, 2);
+      ctx.fillRect(cx + 14, cy - 10, 2, 2);
+      ctx.fillRect(cx + 4, cy - 18, 2, 2);
+      ctx.fillRect(cx - 6, cy + 6, 2, 2);
     }
-  }
-
-  function drawChurus() {
-    for (const c of chuus) {
-      const bob = Math.sin(c.t) * 3;
-      const cx = c.x, cy = c.y + bob;
-      // 涼やかな水色オーラ
-      const auraR = 24 + Math.sin(c.t * 2) * 2;
-      const grad = ctx.createRadialGradient(cx, cy, 4, cx, cy, auraR);
-      grad.addColorStop(0, 'rgba(170,220,255,0.55)');
-      grad.addColorStop(1, 'rgba(170,220,255,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(cx, cy, auraR, 0, Math.PI*2);
-      ctx.fill();
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(Math.sin(c.t * 0.5) * 0.1);
-      // 本体 (パッケージ・横向きカプセル)
-      const bw = 38, bh = 14;
-      ctx.fillStyle = '#ff8a5a';
-      roundedRect(ctx, -bw/2, -bh/2, bw, bh, 6);
-      ctx.fill();
-      // 上部ハイライト
-      ctx.fillStyle = '#ffc8a0';
-      roundedRect(ctx, -bw/2 + 3, -bh/2 + 2, bw - 6, 3, 1.5);
-      ctx.fill();
-      // 開口部 (左)
-      ctx.fillStyle = '#c8552a';
-      roundedRect(ctx, -bw/2, -bh/2 + 2, 5, bh - 4, 1.5);
-      ctx.fill();
-      // ねじり (右)
-      ctx.fillStyle = '#c8552a';
-      ctx.beginPath();
-      ctx.moveTo(bw/2 - 2, -bh/2);
-      ctx.lineTo(bw/2 + 4, -bh/2 - 3);
-      ctx.lineTo(bw/2 + 4, bh/2 + 3);
-      ctx.lineTo(bw/2 - 2, bh/2);
-      ctx.closePath();
-      ctx.fill();
-      // 中央の白ラベル
-      ctx.fillStyle = '#fff5e8';
-      roundedRect(ctx, -10, -3.5, 18, 7, 2);
-      ctx.fill();
-      // ラベル文字
-      ctx.fillStyle = '#ff5e87';
-      ctx.font = 'bold 7px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('CHU', -1, 0.5);
-      ctx.textAlign = 'start';
-      ctx.textBaseline = 'alphabetic';
-      // 中身ぽてっ
-      ctx.fillStyle = '#fff8b8';
-      ctx.beginPath();
-      ctx.ellipse(-bw/2 - 3, 0, 2, 3, 0, 0, Math.PI*2);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-  function roundedRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
   }
 
   function drawParticles() {
@@ -1758,177 +1395,10 @@ try {
     drawGround();
     drawFish();
     drawMatatabis();
-    drawChurus();
     drawHearts();
     drawObstacles();
     drawPlayer();
     drawParticles();
-    // SLOW 効果のオーバーレイ
-    if (slowFrames > 0) {
-      const grad = ctx.createRadialGradient(VW/2, VH/2, VW * 0.3, VW/2, VH/2, VW * 0.75);
-      grad.addColorStop(0, 'rgba(120, 200, 255, 0)');
-      grad.addColorStop(1, 'rgba(120, 200, 255, 0.22)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, VW, VH);
-    }
-  }
-
-  // ---- ゲームオーバー演出 (鳥とヘビにいじめられる) ----
-  function drawDeadScene() {
-    // 暗めの夕焼け背景
-    const g = ctx.createLinearGradient(0, 0, 0, VH);
-    g.addColorStop(0, '#1a0e2a');
-    g.addColorStop(0.5, '#5a2a3a');
-    g.addColorStop(1, '#8a3a3a');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, VW, VH);
-
-    // 月
-    ctx.fillStyle = 'rgba(255, 230, 200, 0.85)';
-    ctx.beginPath();
-    ctx.arc(80, 110, 36, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(120, 60, 80, 0.5)';
-    ctx.beginPath();
-    ctx.arc(92, 102, 30, 0, Math.PI * 2);
-    ctx.fill();
-
-    // 地面
-    ctx.fillStyle = '#1a0820';
-    ctx.fillRect(0, GROUND_Y, VW, VH - GROUND_Y);
-    ctx.fillStyle = '#ff8a7a';
-    ctx.fillRect(0, GROUND_Y, VW, 3);
-
-    const t = frame * 0.05;
-
-    // ふらつく猫 (中央)
-    const cat = CHARACTERS[selectedChar];
-    const cx = VW / 2;
-    const sway = Math.sin(t * 2) * 4;
-    const catX = cx - cat.w / 2 + sway;
-    const catY = GROUND_Y;
-    drawCat(ctx, catX, catY, cat.w, cat.h, 0, true, cat, frame, true);
-
-    // ぐるぐる目を上書き (頭の位置に)
-    const headCx = catX + cat.w / 2;
-    const headCy = catY - cat.h + cat.h * 0.2;
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(headCx - cat.w * 0.18, headCy, cat.w * 0.1, 0, Math.PI*2);
-    ctx.arc(headCx + cat.w * 0.18, headCy, cat.w * 0.1, 0, Math.PI*2);
-    ctx.fill();
-    ctx.strokeStyle = '#1a1a2e';
-    ctx.lineWidth = 1.5;
-    [-1, 1].forEach(side => {
-      ctx.beginPath();
-      const ex = headCx + side * cat.w * 0.18;
-      for (let a = 0; a < Math.PI * 4; a += 0.3) {
-        const r = 0.5 + a * 0.4;
-        const px = ex + Math.cos(a) * r;
-        const py = headCy + Math.sin(a) * r;
-        if (a === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-      }
-      ctx.stroke();
-    });
-
-    // 苦しみマーク (キャラの上)
-    ctx.fillStyle = '#ffd84d';
-    ctx.font = 'bold 22px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('×﹏×', headCx, catY - cat.h - 14 - Math.abs(Math.sin(t * 2)) * 4);
-    ctx.textAlign = 'start';
-
-    // ヘビ (左で煽る、舌を出す)
-    const snakeWave = Math.sin(t * 2) * 3;
-    ctx.fillStyle = '#4a8a3a';
-    ctx.beginPath();
-    ctx.ellipse(cx - 80, GROUND_Y - 12 + snakeWave, 36, 9, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = '#5aaa4a';
-    ctx.beginPath();
-    ctx.ellipse(cx - 50, GROUND_Y - 12 + snakeWave, 10, 8, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = '#ffd84d';
-    ctx.fillRect(cx - 46, GROUND_Y - 18 + snakeWave, 3, 3);
-    ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(cx - 45, GROUND_Y - 17 + snakeWave, 1, 2);
-    // 舌
-    const tongueOut = (Math.floor(t * 3) % 4 < 2) ? 12 : 6;
-    ctx.fillStyle = '#ff5e87';
-    ctx.fillRect(cx - 40, GROUND_Y - 13 + snakeWave, tongueOut, 1.5);
-    ctx.fillRect(cx - 40 + tongueOut, GROUND_Y - 14 + snakeWave, 3, 1.5);
-    ctx.fillRect(cx - 40 + tongueOut, GROUND_Y - 12 + snakeWave, 3, 1.5);
-    // ヘビの縞
-    ctx.fillStyle = '#2a6a1a';
-    for (let i = -100; i < -56; i += 10) {
-      ctx.fillRect(cx + i, GROUND_Y - 18 + snakeWave, 3, 12);
-    }
-
-    // 鳥 (上空でつつく)
-    const wing = Math.sin(t * 4) * 8;
-    const bcx = cx + 30;
-    const bcy = GROUND_Y - 70 + Math.sin(t * 1.5) * 6;
-    // 翼 奥
-    ctx.fillStyle = '#2c2c3a';
-    ctx.beginPath();
-    ctx.moveTo(bcx - 4, bcy);
-    ctx.lineTo(bcx - 22, bcy - wing);
-    ctx.lineTo(bcx - 8, bcy + 2);
-    ctx.closePath();
-    ctx.fill();
-    // 体
-    ctx.fillStyle = '#4a4a5a';
-    ctx.beginPath();
-    ctx.ellipse(bcx, bcy, 18, 12, 0, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = '#7a7a8a';
-    ctx.beginPath();
-    ctx.ellipse(bcx, bcy + 2, 14, 9, 0, 0, Math.PI*2);
-    ctx.fill();
-    // 翼 手前
-    ctx.fillStyle = '#3a3a4a';
-    ctx.beginPath();
-    ctx.moveTo(bcx + 2, bcy);
-    ctx.lineTo(bcx + 18, bcy - wing - 2);
-    ctx.lineTo(bcx + 6, bcy + 4);
-    ctx.closePath();
-    ctx.fill();
-    // くちばし (下向きに猫をつつく)
-    const peck = Math.abs(Math.sin(t * 4)) * 8;
-    ctx.fillStyle = '#ffaa3a';
-    ctx.beginPath();
-    ctx.moveTo(bcx - 4, bcy + 12);
-    ctx.lineTo(bcx, bcy + 22 + peck);
-    ctx.lineTo(bcx + 4, bcy + 12);
-    ctx.closePath();
-    ctx.fill();
-    // 目
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(bcx - 4, bcy - 2, 2.5, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = '#1a1a2e';
-    ctx.beginPath();
-    ctx.arc(bcx - 5, bcy - 2, 1.4, 0, Math.PI*2);
-    ctx.fill();
-
-    // 「ピヨピヨ」「シャー」吹き出し
-    if (Math.floor(t) % 2 === 0) {
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('ピヨピヨ♪', bcx + 18, bcy - 18);
-      ctx.fillText('シャー！', cx - 80, GROUND_Y - 30);
-      ctx.textAlign = 'start';
-    }
-
-    // 漂う羽根
-    for (let i = 0; i < 5; i++) {
-      const fy = (frame * 0.7 + i * 60) % 200;
-      const fx = cx + 50 + Math.sin(frame * 0.05 + i) * 30;
-      ctx.fillStyle = `rgba(180,180,200,${0.6 - fy/300})`;
-      ctx.fillRect(fx, GROUND_Y - 80 - fy, 4, 2);
-    }
   }
 
   // ---- ゲームオーバー演出 (鳥とヘビにいじめられる) ----
@@ -2106,14 +1576,6 @@ try {
     startGame();
   });
 })();
-} catch (err) {
-  const box = document.getElementById('errorBox');
-  if (box) {
-    box.textContent = 'エラー: ' + (err && err.message ? err.message : String(err)) +
-      '\n' + (err && err.stack ? err.stack.split('\n').slice(0, 5).join('\n') : '');
-    box.classList.remove('hidden');
-  }
-}
 </script>
 </body>
 </html>
